@@ -3233,7 +3233,7 @@
 <ol>
 <li><a href="#database-setup">Database Setup</a> — Create the PostgreSQL connection Secret</li>
 <li><a href="#create-gateway">Create Gateway</a> — Deploy maas-default-gateway (required before modelsAsService)</li>
-<li><a href="#configure-datasciencecluster">Configure DataScienceCluster</a> — Enable KServe and modelsAsService in your DataScienceCluster</li>
+<li><a href="#configure-datasciencecluster">Configure DataScienceCluster</a> — Enable modelsAsAService in your DataScienceCluster</li>
 <li><a href="../model-setup/">Model Setup</a> — Deploy sample models</li>
 <li><a href="../validation/">Validation</a> — Verify the deployment</li>
 </ol>
@@ -3327,7 +3327,11 @@
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Managed (Recommended)</label><label for="__tabbed_1_2">Kustomize</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<p>The operator deploys <code>maas-controller</code>, which self-bootstraps <code>AITenant/models-as-a-service</code>; that AITenant creates or adopts <code>Tenant/default-tenant</code> and reconciles the MaaS platform workloads (maas-api, gateway policies, telemetry). Create or update your DataScienceCluster with <code>modelsAsService</code> in Managed state:</p>
+<p>The AI Gateway Operator deploys <code>maas-controller</code>, which self-bootstraps <code>AITenant/models-as-a-service</code>; that AITenant creates or adopts <code>Tenant/default-tenant</code> and reconciles the MaaS platform workloads (maas-api, gateway policies, telemetry). Create or update your DataScienceCluster with <code>modelsAsAService</code> in Managed state:</p>
+<div class="admonition note">
+<p class="admonition-title">KServe not required for MaaS</p>
+<p>MaaS is now deployed as a sub-component of the <strong>AI Gateway Operator</strong> (<code>aigateway.modelsAsAService</code>), not KServe. You no longer need KServe enabled to use MaaS. Include KServe only if you need model serving capabilities independently.</p>
+</div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="l l-Scalar l-Scalar-Plain">kubectl apply -f - &lt;&lt;EOF</span>
 <a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="l l-Scalar l-Scalar-Plain">apiVersion</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">datasciencecluster.opendatahub.io/v2</span>
 <a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DataScienceCluster</span>
@@ -3335,16 +3339,15 @@
 <a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default-dsc</span>
 <a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span><span class="nt">components</span><span class="p">:</span>
-<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span><span class="nt">kserve</span><span class="p">:</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span><span class="nt">aigateway</span><span class="p">:</span>
 <a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">      </span><span class="nt">managementState</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Managed</span>
-<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">      </span><span class="nt">rawDeploymentServiceConfig</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Headed</span>
-<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">      </span><span class="nt">modelsAsService</span><span class="p">:</span>
-<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">        </span><span class="nt">managementState</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Managed</span>
-<a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="w">    </span><span class="nt">dashboard</span><span class="p">:</span>
-<a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">      </span><span class="nt">managementState</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Managed</span>
-<a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="w">    </span><span class="nt">llamastackoperator</span><span class="p">:</span>
-<a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">      </span><span class="nt">managementState</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Managed</span>
-<a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="l l-Scalar l-Scalar-Plain">EOF</span>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">      </span><span class="nt">modelsAsAService</span><span class="p">:</span>
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">        </span><span class="nt">managementState</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Managed</span>
+<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">    </span><span class="nt">dashboard</span><span class="p">:</span>
+<a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="w">      </span><span class="nt">managementState</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Managed</span>
+<a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">    </span><span class="nt">llamastackoperator</span><span class="p">:</span>
+<a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="w">      </span><span class="nt">managementState</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Managed</span>
+<a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="l l-Scalar l-Scalar-Plain">EOF</span>
 </code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">LlamaStack Operator (GenAI Studio)</p>
@@ -3355,21 +3358,19 @@ see <a href="#odhdashboardconfig-feature-flags">OdhDashboardConfig Feature Flags
 </div>
 <div class="admonition note">
 <p class="admonition-title">Connectivity Link warning (ODH with Kuadrant)</p>
-<p>When using ODH with Kuadrant (upstream), you may see <code>Warning: Red Hat Connectivity Link is not installed, LLMInferenceService cannot be used</code> in the Kserve status initially. This typically resolves after a few minutes as the operator reconciles. If it persists, run <code>kubectl describe datasciencecluster default-dsc</code> and check that the Kuadrant/Connectivity Link operator is installed and healthy.</p>
+<p>When using ODH with Kuadrant (upstream), you may see <code>Warning: Red Hat Connectivity Link is not installed, LLMInferenceService cannot be used</code> initially. This typically resolves after a few minutes as the operator reconciles. If it persists, run <code>kubectl describe datasciencecluster default-dsc</code> and check that the Kuadrant/Connectivity Link operator is installed and healthy.</p>
 </div>
 <p><strong>Validate DataScienceCluster:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Check DataScienceCluster status</span>
 <a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>datasciencecluster<span class="w"> </span>default-dsc
 <a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Wait for KServe and ModelsAsService to be ready (optional)</span>
-<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>kubectl<span class="w"> </span><span class="nb">wait</span><span class="w"> </span>--for<span class="o">=</span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions[?(@.type==&quot;KserveReady&quot;)].status}&#39;</span><span class="o">=</span>True<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Wait for MaaS to be ready (optional)</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>kubectl<span class="w"> </span><span class="nb">wait</span><span class="w"> </span>--for<span class="o">=</span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions[?(@.type==&quot;ModelControllerReady&quot;)].status}&#39;</span><span class="o">=</span>True<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">  </span>datasciencecluster/default-dsc<span class="w"> </span>--timeout<span class="o">=</span>300s
-<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>kubectl<span class="w"> </span><span class="nb">wait</span><span class="w"> </span>--for<span class="o">=</span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions[?(@.type==&quot;ModelControllerReady&quot;)].status}&#39;</span><span class="o">=</span>True<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">  </span>datasciencecluster/default-dsc<span class="w"> </span>--timeout<span class="o">=</span>300s
-<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>
-<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="c1"># Verify maas-api deployment is running (use opendatahub for ODH, redhat-ods-applications for RHOAI)</span>
-<a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deployment<span class="w"> </span>maas-api<span class="w"> </span>-n<span class="w"> </span>opendatahub
-<a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deployment/maas-api<span class="w"> </span>-n<span class="w"> </span>opendatahub<span class="w"> </span>--timeout<span class="o">=</span>120s
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="c1"># Verify maas-api deployment is running (use opendatahub for ODH, redhat-ods-applications for RHOAI)</span>
+<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deployment<span class="w"> </span>maas-api<span class="w"> </span>-n<span class="w"> </span>opendatahub
+<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deployment/maas-api<span class="w"> </span>-n<span class="w"> </span>opendatahub<span class="w"> </span>--timeout<span class="o">=</span>120s
 </code></pre></div>
 <p>The <code>maas-controller</code> (deployed by the operator) will automatically create <code>AITenant/models-as-a-service</code>, which creates or adopts <code>Tenant/default-tenant</code> and reconciles:</p>
 <ul>
@@ -3382,7 +3383,7 @@ see <a href="#odhdashboardconfig-feature-flags">OdhDashboardConfig Feature Flags
 <li><strong>NetworkPolicy</strong> (maas-authorino-allow) - Allows Authorino to reach MaaS API</li>
 </ul>
 <h3 id="tenant-cr">Tenant CR</h3>
-<p>With <code>modelsAsService</code> <strong>Managed</strong>, the <a href="https://github.com/opendatahub-io/opendatahub-operator">Open Data Hub operator</a> deploys <code>maas-controller</code>, which self-bootstraps <code>AITenant/models-as-a-service</code> in <code>ai-tenants</code>. The AITenant reconciler creates or adopts a <strong>namespace-scoped</strong> <code>Tenant</code> object. The resource name <strong>must</strong> be <code>default-tenant</code> (enforced via CEL validation). The <code>Tenant</code> CR lives in the <code>models-as-a-service</code> namespace (same namespace as <code>MaaSSubscription</code> and <code>MaaSAuthPolicy</code>). The authoritative API definition is in the maas-controller repo: <a href="https://github.com/opendatahub-io/models-as-a-service/blob/main/maas-controller/api/maas/v1alpha1/tenant_types.go"><code>tenant_types.go</code></a>.</p>
+<p>With <code>modelsAsAService</code> <strong>Managed</strong>, the ODH operator (via the <code>aigateway</code> component) deploys <code>maas-controller</code>, which self-bootstraps <code>AITenant/models-as-a-service</code> in <code>ai-tenants</code>. The AITenant reconciler creates or adopts a <strong>namespace-scoped</strong> <code>Tenant</code> object. The resource name <strong>must</strong> be <code>default-tenant</code> (enforced via CEL validation). The <code>Tenant</code> CR lives in the <code>models-as-a-service</code> namespace (same namespace as <code>MaaSSubscription</code> and <code>MaaSAuthPolicy</code>). The authoritative API definition is in the maas-controller repo: <a href="https://github.com/opendatahub-io/models-as-a-service/blob/main/maas-controller/api/maas/v1alpha1/tenant_types.go"><code>tenant_types.go</code></a>.</p>
 <p><strong>Nothing in <code>spec</code> is required for a default install.</strong> If you omit <code>spec</code>, the controller uses the same defaults as this guide: Gateway <strong><code>openshift-ingress</code> / <code>maas-default-gateway</code></strong>, and telemetry metric toggles use the defaults described below. During bootstrap, existing <code>Tenant/default-tenant.spec.externalOIDC</code> settings are automatically migrated to <code>AITenant/models-as-a-service.spec.oidc</code>. Going forward, set OIDC on <code>AITenant/models-as-a-service.spec.oidc</code>. For AITenant-managed tenants, Gateway and OIDC platform context comes from <code>AITenant</code>; existing <code>Tenant.spec.gatewayRef</code> and <code>Tenant.spec.externalOIDC</code> values are preserved for compatibility but ignored.</p>
 <table>
 <thead>
@@ -3458,7 +3459,7 @@ see <a href="#odhdashboardconfig-feature-flags">OdhDashboardConfig Feature Flags
 <p class="admonition-title">Development and early testing</p>
 <p>Kustomize deployment can be used for <strong>development and early testing purposes</strong>. For production, use the Managed tab above.</p>
 </div>
-<p>Set <code>modelsAsService</code> to <strong>Removed</strong> so the operator does not deploy the MaaS API, then deploy MaaS directly from the canonical build root:</p>
+<p>Set <code>modelsAsAService</code> to <strong>Removed</strong> so the AI Gateway Operator does not deploy MaaS, then deploy MaaS directly from the canonical build root:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="l l-Scalar l-Scalar-Plain">kubectl apply -f - &lt;&lt;EOF</span>
 <a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="l l-Scalar l-Scalar-Plain">apiVersion</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">datasciencecluster.opendatahub.io/v2</span>
 <a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DataScienceCluster</span>
@@ -3466,14 +3467,13 @@ see <a href="#odhdashboardconfig-feature-flags">OdhDashboardConfig Feature Flags
 <a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default-dsc</span>
 <a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">  </span><span class="nt">components</span><span class="p">:</span>
-<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">    </span><span class="nt">kserve</span><span class="p">:</span>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">    </span><span class="nt">aigateway</span><span class="p">:</span>
 <a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">      </span><span class="nt">managementState</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Managed</span>
-<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">      </span><span class="nt">rawDeploymentServiceConfig</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Headed</span>
-<a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">      </span><span class="nt">modelsAsService</span><span class="p">:</span>
-<a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">        </span><span class="nt">managementState</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Removed</span>
-<a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">    </span><span class="nt">dashboard</span><span class="p">:</span>
-<a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="w">      </span><span class="nt">managementState</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Managed</span>
-<a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="l l-Scalar l-Scalar-Plain">EOF</span>
+<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">      </span><span class="nt">modelsAsAService</span><span class="p">:</span>
+<a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">        </span><span class="nt">managementState</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Removed</span>
+<a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">    </span><span class="nt">dashboard</span><span class="p">:</span>
+<a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">      </span><span class="nt">managementState</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Managed</span>
+<a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="l l-Scalar l-Scalar-Plain">EOF</span>
 </code></pre></div>
 <p>Deploy the MaaS controller (run from the project root; ensure the <code>maas-db-config</code> Secret exists per <a href="#database-setup">Database Setup</a>):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-k<span class="w"> </span>deployment/base/maas-controller/default
@@ -3594,7 +3594,7 @@ defaults if it is deleted, but does not overwrite user changes to existing field
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="June 29, 2026 18:40:07 UTC">June 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 8, 2026 21:21:12 UTC">July 8, 2026</span>
   </span>
 
     
