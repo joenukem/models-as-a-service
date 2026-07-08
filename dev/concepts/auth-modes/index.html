@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="https://opendatahub-io.github.io/models-as-a-service/dev/install/validation/">
+        <link rel="canonical" href="https://opendatahub-io.github.io/models-as-a-service/dev/concepts/auth-modes/">
       
       
-        <link rel="prev" href="../external-model-setup/">
+        <link rel="prev" href="../model-reference/">
       
       
-        <link rel="next" href="../troubleshooting/">
+        <link rel="next" href="../api-key-authentication/">
       
       
         
@@ -25,7 +25,7 @@
     
     
       
-        <title>Validation - ODH Models-as-a-Service Documentation</title>
+        <title>Authentication Modes - ODH Models-as-a-Service Documentation</title>
       
     
     
@@ -76,7 +76,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-guide" class="md-skip">
+        <a href="#authentication-modes" class="md-skip">
           Skip to content
         </a>
       
@@ -113,7 +113,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation
+              Authentication Modes
             
           </span>
         </div>
@@ -249,11 +249,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../concepts/architecture/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../architecture/" class="md-tabs__link">
           
   
   
@@ -269,12 +271,10 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
+      <li class="md-tabs__item">
         <a href="../../quickstart/" class="md-tabs__link">
           
   
@@ -680,28 +680,31 @@
       
   
   
+    
   
   
+  
     
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
         
           
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
-        
-          
-          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
             
   
   
@@ -719,7 +722,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -737,7 +740,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../concepts/architecture/" class="md-nav__link">
+      <a href="../architecture/" class="md-nav__link">
         
   
   
@@ -765,7 +768,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../concepts/personas/" class="md-nav__link">
+      <a href="../personas/" class="md-nav__link">
         
   
   
@@ -793,7 +796,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../concepts/subscription-overview/" class="md-nav__link">
+      <a href="../subscription-overview/" class="md-nav__link">
         
   
   
@@ -821,7 +824,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../concepts/model-reference/" class="md-nav__link">
+      <a href="../model-reference/" class="md-nav__link">
         
   
   
@@ -846,10 +849,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../concepts/auth-modes/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication Modes
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -865,6 +895,103 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#mode-1-rhoai-dashboard-platform-gateway" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mode 1: RHOAI Dashboard (Platform Gateway)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mode-2-standalone-oidc-client-external-idp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mode 2: Standalone OIDC Client (External IdP)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-both-modes-coexist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How Both Modes Coexist
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation Layers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#idp-configuration-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        IdP Configuration Requirements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#field-alignment-tenant-vs-aitenant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Field Alignment (Tenant vs AITenant)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -877,7 +1004,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../concepts/api-key-authentication/" class="md-nav__link">
+      <a href="../api-key-authentication/" class="md-nav__link">
         
   
   
@@ -905,7 +1032,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../concepts/model-access-control/" class="md-nav__link">
+      <a href="../model-access-control/" class="md-nav__link">
         
   
   
@@ -937,31 +1064,28 @@
       
   
   
-    
   
   
-  
     
     
     
     
-      
-        
-        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
             
   
   
@@ -979,7 +1103,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1031,13 +1155,10 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
@@ -1046,7 +1167,7 @@
         <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_2" >
         
           
-          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="">
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
             
   
   
@@ -1082,7 +1203,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../prerequisites/" class="md-nav__link">
+      <a href="../../install/prerequisites/" class="md-nav__link">
         
   
   
@@ -1110,7 +1231,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../platform-setup/" class="md-nav__link">
+      <a href="../../install/platform-setup/" class="md-nav__link">
         
   
   
@@ -1143,31 +1264,28 @@
                 
   
   
-    
   
   
-  
     
     
     
     
       
       
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
         
           
-          
         
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" checked>
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_3" >
         
           
-          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
             
   
   
@@ -1185,7 +1303,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1203,7 +1321,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../maas-setup/" class="md-nav__link">
+      <a href="../../install/maas-setup/" class="md-nav__link">
         
   
   
@@ -1231,7 +1349,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../model-setup/" class="md-nav__link">
+      <a href="../../install/model-setup/" class="md-nav__link">
         
   
   
@@ -1259,7 +1377,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../external-model-setup/" class="md-nav__link">
+      <a href="../../install/external-model-setup/" class="md-nav__link">
         
   
   
@@ -1284,37 +1402,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Validation
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../install/validation/" class="md-nav__link">
         
   
   
@@ -1330,159 +1421,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#manual-validation-recommended" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Manual Validation (Recommended)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Manual Validation (Recommended)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#1-get-gateway-endpoint" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Get Gateway Endpoint
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#2-get-api-key" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. Get API Key
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#3-list-available-models" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. List Available Models
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#4-test-model-inference-endpoint" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Test Model Inference Endpoint
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#6-test-authorization-enforcement" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        6. Test Authorization Enforcement
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#7-test-rate-limiting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        7. Test Rate Limiting
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#automated-validation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Automated Validation
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#tls-verification" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        TLS Verification
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="TLS Verification">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#check-certificate" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Check Certificate
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#test-https-endpoint" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Test HTTPS Endpoint
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1495,7 +1433,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../troubleshooting/" class="md-nav__link">
+      <a href="../../install/troubleshooting/" class="md-nav__link">
         
   
   
@@ -3125,93 +3063,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#manual-validation-recommended" class="md-nav__link">
+  <a href="#mode-1-rhoai-dashboard-platform-gateway" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Manual Validation (Recommended)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Manual Validation (Recommended)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#1-get-gateway-endpoint" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Get Gateway Endpoint
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#2-get-api-key" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. Get API Key
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#3-list-available-models" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. List Available Models
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#4-test-model-inference-endpoint" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Test Model Inference Endpoint
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#6-test-authorization-enforcement" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        6. Test Authorization Enforcement
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#7-test-rate-limiting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        7. Test Rate Limiting
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#automated-validation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Automated Validation
+        Mode 1: RHOAI Dashboard (Platform Gateway)
       
     </span>
   </a>
@@ -3219,41 +3074,68 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#tls-verification" class="md-nav__link">
+  <a href="#mode-2-standalone-oidc-client-external-idp" class="md-nav__link">
     <span class="md-ellipsis">
       
-        TLS Verification
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="TLS Verification">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#check-certificate" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Check Certificate
+        Mode 2: Standalone OIDC Client (External IdP)
       
     </span>
   </a>
   
 </li>
-        
-          <li class="md-nav__item">
-  <a href="#test-https-endpoint" class="md-nav__link">
+      
+        <li class="md-nav__item">
+  <a href="#how-both-modes-coexist" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Test HTTPS Endpoint
+        How Both Modes Coexist
       
     </span>
   </a>
   
 </li>
-        
-      </ul>
-    </nav>
+      
+        <li class="md-nav__item">
+  <a href="#validation-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation Layers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#idp-configuration-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        IdP Configuration Requirements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#field-alignment-tenant-vs-aitenant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Field Alignment (Tenant vs AITenant)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
   
 </li>
       
@@ -3277,136 +3159,176 @@
   
 
 
-<h1 id="validation-guide">Validation Guide</h1>
-<p>This guide provides instructions for validating and testing your MaaS Platform deployment.</p>
-<div class="admonition note">
-<p class="admonition-title">Prerequisite</p>
-<p>At least one model must be deployed to validate the installation. See <a href="../model-setup/">Model Setup</a> to deploy sample models.</p>
-</div>
-<h2 id="manual-validation-recommended">Manual Validation (Recommended)</h2>
-<p>Follow these steps to validate your deployment and understand each component:</p>
-<h3 id="1-get-gateway-endpoint">1. Get Gateway Endpoint</h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nv">CLUSTER_DOMAIN</span><span class="o">=</span><span class="k">$(</span>kubectl<span class="w"> </span>get<span class="w"> </span>ingresses.config.openshift.io<span class="w"> </span>cluster<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.spec.domain}&#39;</span><span class="k">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nv">HOST</span><span class="o">=</span><span class="s2">&quot;https://maas.</span><span class="si">${</span><span class="nv">CLUSTER_DOMAIN</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;Gateway endpoint: </span><span class="nv">$HOST</span><span class="s2">&quot;</span>
+<h1 id="authentication-modes">Authentication Modes</h1>
+<p>MaaS supports two authentication paths for accessing models. Both paths produce the same result — an authenticated identity that the gateway validates — but they differ in how the user obtains their token and which component validates it.</p>
+<h2 id="mode-1-rhoai-dashboard-platform-gateway">Mode 1: RHOAI Dashboard (Platform Gateway)</h2>
+<p>Users log in through the RHOAI Dashboard, which authenticates via OpenShift OAuth. The Dashboard's kube-auth-proxy handles the OAuth flow and produces an OpenShift access token.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>User → RHOAI Dashboard → OpenShift OAuth → kube-auth-proxy
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  → Dashboard UI → BFF → maas-api (mint API key)
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  → User uses API key for inference
 </code></pre></div>
+<p><strong>Token validation layer:</strong> Gateway / Authorino validates the API key via <code>POST /internal/v1/api-keys/validate</code> callback to maas-api.</p>
+<p><strong>What the admin configures:</strong></p>
+<ul>
+<li>Nothing MaaS-specific — authentication is handled by the platform (OpenShift OAuth + kube-auth-proxy)</li>
+<li>API keys are minted through the Dashboard UI or BFF, bound to the user's OpenShift identity and groups</li>
+<li>The user's group membership (from OpenShift) determines which subscriptions and models are accessible</li>
+</ul>
+<p><strong>When to use:</strong> Interactive access through the RHOAI web interface. This is the default path for data scientists using the MaaS Playground or managing API keys through the Dashboard.</p>
+<h2 id="mode-2-standalone-oidc-client-external-idp">Mode 2: Standalone OIDC Client (External IdP)</h2>
+<p>Users authenticate directly against an external identity provider (Keycloak, Entra ID, Okta) and present a JWT bearer token to the MaaS gateway. Authorino validates the JWT against the IdP's JWKS endpoint.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>User → External IdP (Keycloak / Entra ID) → JWT token
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  → MaaS Gateway → Authorino validates JWT via JWKS
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  → maas-api (mint API key with OIDC identity)
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>  → User uses API key for inference
+</code></pre></div>
+<p><strong>Token validation layer:</strong> Gateway / Authorino validates the JWT locally using cached JWKS keys from the IdP. The <code>azp</code> (authorized party) claim is checked against the configured <code>clientId</code>.</p>
+<p><strong>What the admin configures:</strong></p>
+<p>For AITenant-managed tenants (including the default tenant), configure OIDC on the AITenant CR:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">maas.opendatahub.io/v1alpha1</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AITenant</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">models-as-a-service</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ai-tenants</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">oidc</span><span class="p">:</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="nt">issuerUrl</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://keycloak.example.com/realms/maas&quot;</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="nt">clientId</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">maas-api</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="nt">ttl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">300</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>issuerUrl</code></td>
+<td>OIDC issuer URL (must be HTTPS). Must serve <code>.well-known/openid-configuration</code>.</td>
+</tr>
+<tr>
+<td><code>clientId</code></td>
+<td>OAuth2 client ID. Tokens must have <code>azp</code> claim matching this value.</td>
+</tr>
+<tr>
+<td><code>ttl</code></td>
+<td>JWKS cache duration in seconds (default: 300, minimum: 30).</td>
+</tr>
+</tbody>
+</table>
+<p>For unmanaged tenants (not backed by an AITenant), configure OIDC on the Tenant CR directly:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">maas.opendatahub.io/v1alpha1</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Tenant</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default-tenant</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">models-as-a-service</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span><span class="nt">externalOIDC</span><span class="p">:</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span><span class="nt">issuerUrl</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://keycloak.example.com/realms/maas&quot;</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span><span class="nt">clientId</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">maas-api</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span><span class="nt">ttl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">300</span>
+</code></pre></div>
+<p><strong>When to use:</strong> Programmatic API access from CI/CD pipelines, external applications, or enterprise environments that federate identity through a central IdP rather than OpenShift OAuth.</p>
+<h2 id="how-both-modes-coexist">How Both Modes Coexist</h2>
+<p>Both modes work simultaneously on the same gateway. The AuthPolicy generated by the MaaS controller accepts:</p>
+<ol>
+<li><strong>OpenShift tokens</strong> — validated via Kubernetes TokenReview</li>
+<li><strong>API keys</strong> (<code>sk-oai-*</code>) — validated via maas-api callback</li>
+<li><strong>OIDC JWTs</strong> (when configured) — validated locally by Authorino against cached JWKS</li>
+</ol>
+<p>The order of evaluation is determined by Authorino's authentication chain. A request succeeds if <strong>any</strong> authenticator matches. There is no conflict between modes — they use different token formats and different validation paths.</p>
+<h2 id="validation-layers">Validation Layers</h2>
+<table>
+<thead>
+<tr>
+<th>What</th>
+<th>Where validated</th>
+<th>How</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OpenShift bearer token</td>
+<td>Gateway / Authorino</td>
+<td>Kubernetes TokenReview API</td>
+</tr>
+<tr>
+<td>API key (<code>sk-oai-*</code>)</td>
+<td>Gateway / Authorino → maas-api</td>
+<td>HTTP callback to <code>/internal/v1/api-keys/validate</code></td>
+</tr>
+<tr>
+<td>OIDC JWT</td>
+<td>Gateway / Authorino</td>
+<td>Local JWKS validation (cached from IdP)</td>
+</tr>
+<tr>
+<td>Subscription + group authorization</td>
+<td>Gateway / Authorino → maas-api</td>
+<td>HTTP callback to <code>/internal/v1/subscriptions/select</code></td>
+</tr>
+<tr>
+<td>Token rate limiting</td>
+<td>Gateway / Kuadrant + Limitador</td>
+<td>WASM shim evaluates TokenRateLimitPolicy</td>
+</tr>
+</tbody>
+</table>
+<h2 id="idp-configuration-requirements">IdP Configuration Requirements</h2>
+<p>For Mode 2 (standalone OIDC), the IdP must:</p>
+<ul>
+<li>Serve <code>/.well-known/openid-configuration</code> over HTTPS at the <code>issuerUrl</code></li>
+<li>Include <code>azp</code> (authorized party) claim in issued tokens matching the configured <code>clientId</code></li>
+<li>Expose a JWKS endpoint for public key retrieval</li>
+<li>Issue tokens with group claims if group-based authorization is needed (claim name depends on IdP configuration)</li>
+</ul>
+<p>MaaS does <strong>not</strong> perform OAuth2 client authentication (no <code>client_secret</code>). It validates bearer tokens only. Client authentication and secret management are the IdP's responsibility.</p>
+<h2 id="field-alignment-tenant-vs-aitenant">Field Alignment (Tenant vs AITenant)</h2>
+<p>Configuration fields align between Tenant CR and AITenant CR:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Tenant CR path</th>
+<th>AITenant CR path</th>
+<th>Semantics</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Issuer URL</td>
+<td><code>spec.externalOIDC.issuerUrl</code></td>
+<td><code>spec.oidc.issuerUrl</code></td>
+<td>OIDC discovery endpoint (HTTPS required)</td>
+</tr>
+<tr>
+<td>Client ID</td>
+<td><code>spec.externalOIDC.clientId</code></td>
+<td><code>spec.oidc.clientId</code></td>
+<td>OAuth2 client ID for <code>azp</code> claim matching</td>
+</tr>
+<tr>
+<td>JWKS TTL</td>
+<td><code>spec.externalOIDC.ttl</code></td>
+<td><code>spec.oidc.ttl</code></td>
+<td>Cache duration for JWKS keys (seconds)</td>
+</tr>
+</tbody>
+</table>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>If you haven't created the <code>maas-default-gateway</code> yet, you can use the fallback:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nv">HOST</span><span class="o">=</span><span class="s2">&quot;https://gateway.</span><span class="si">${</span><span class="nv">CLUSTER_DOMAIN</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;Using fallback gateway endpoint: </span><span class="nv">$HOST</span><span class="s2">&quot;</span>
-</code></pre></div></p>
+<p>For AITenant-managed tenants, set OIDC on the AITenant CR. The controller propagates the configuration to the tenant's gateway AuthPolicy. The Tenant CR's <code>externalOIDC</code> field is ignored for AITenant-managed tenants.</p>
 </div>
-<div class="admonition note">
-<p class="admonition-title">Optional</p>
-<p>List MaaSSubscriptions you can access (authenticate with your OpenShift token; requires <code>HOST</code> from above):
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>curl<span class="w"> </span>-sS<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="k">$(</span>oc<span class="w"> </span>whoami<span class="w"> </span>-t<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">HOST</span><span class="si">}</span><span class="s2">/maas-api/v1/subscriptions&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
-</code></pre></div></p>
-</div>
-<h3 id="2-get-api-key">2. Get API Key</h3>
-<p>For OpenShift, create an API key (authenticate with your OpenShift token):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nv">API_KEY_RESPONSE</span><span class="o">=</span><span class="k">$(</span>curl<span class="w"> </span>-sS<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="k">$(</span>oc<span class="w"> </span>whoami<span class="w"> </span>-t<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;name&quot;: &quot;validation-key&quot;, &quot;description&quot;: &quot;Key for validation&quot;, &quot;expiresIn&quot;: &quot;1h&quot;, &quot;subscription&quot;: &quot;simulator-subscription&quot;}&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">HOST</span><span class="si">}</span><span class="s2">/maas-api/v1/api-keys&quot;</span><span class="k">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="nv">API_KEY</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span><span class="w"> </span><span class="nv">$API_KEY_RESPONSE</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span>.key<span class="k">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;API key obtained: </span><span class="si">${</span><span class="nv">API_KEY</span><span class="p">:</span><span class="nv">0</span><span class="p">:</span><span class="nv">20</span><span class="si">}</span><span class="s2">...&quot;</span>
-</code></pre></div>
-<div class="admonition note">
-<p class="admonition-title">Optional</p>
-<p>List your API keys (metadata only; plaintext secrets are never returned):
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>curl<span class="w"> </span>-sS<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="k">$(</span>oc<span class="w"> </span>whoami<span class="w"> </span>-t<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{}&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">HOST</span><span class="si">}</span><span class="s2">/maas-api/v1/api-keys/search&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
-</code></pre></div></p>
-</div>
-<div class="admonition warning">
-<p class="admonition-title">API key shown only once</p>
-<p>The plaintext API key is returned <strong>only at creation time</strong>. We do not store the API key, so there is no way to retrieve it again. Store it securely when it is displayed. If you run into errors, see <a href="../troubleshooting/">Troubleshooting</a>.</p>
-</div>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p><code>subscription</code> is the MaaSSubscription metadata name to bind (here <code>simulator-subscription</code> matches the <a href="https://github.com/opendatahub-io/models-as-a-service/tree/main/docs/samples/maas-system">maas-system</a> free sample). Use your own name or omit the field to auto-select by <code>spec.priority</code>. For details, see <a href="../../user-guide/api-key-management/">API Key Management</a>.</p>
-</div>
-<h3 id="3-list-available-models">3. List Available Models</h3>
-<p>Each API key is bound to one MaaSSubscription at creation time. <code>GET /v1/models</code> with an API key does not require <code>X-MaaS-Subscription</code>—the list is scoped to that subscription. (With an OpenShift user token instead of an API key, you can optionally send <code>X-MaaS-Subscription</code> to filter when you have access to multiple subscriptions.)</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nv">MODELS</span><span class="o">=</span><span class="k">$(</span>curl<span class="w"> </span>-sS<span class="w"> </span><span class="si">${</span><span class="nv">HOST</span><span class="si">}</span>/maas-api/v1/models<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">    </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$API_KEY</span><span class="s2">&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span>.<span class="k">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="nb">echo</span><span class="w"> </span><span class="nv">$MODELS</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="nv">MODEL_NAME</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span><span class="w"> </span><span class="nv">$MODELS</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.data[0].id&#39;</span><span class="k">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="nv">MODEL_URL</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span><span class="w"> </span><span class="nv">$MODELS</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.data[0].url&#39;</span><span class="k">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;Model URL: </span><span class="nv">$MODEL_URL</span><span class="s2">&quot;</span>
-</code></pre></div>
-<h3 id="4-test-model-inference-endpoint">4. Test Model Inference Endpoint</h3>
-<p>Send a request to the model’s OpenAI-compatible <strong>chat completions</strong> API (expect <strong>200 OK</strong>). This example uses <strong><code>POST /v1/chat/completions</code></strong> with a <code>messages</code> array. If your backend only implements <strong><code>/v1/completions</code></strong> (prompt-based) or another route, adjust the path and JSON body accordingly.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>curl<span class="w"> </span>-sS<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$API_KEY</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>-d<span class="w"> </span><span class="s2">&quot;{\&quot;model\&quot;: \&quot;</span><span class="si">${</span><span class="nv">MODEL_NAME</span><span class="si">}</span><span class="s2">\&quot;, \&quot;messages\&quot;: [{\&quot;role\&quot;: \&quot;user\&quot;, \&quot;content\&quot;: \&quot;Hello\&quot;}], \&quot;max_tokens\&quot;: 50}&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">MODEL_URL</span><span class="si">}</span><span class="s2">/v1/chat/completions&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq
-</code></pre></div>
-<h3 id="6-test-authorization-enforcement">6. Test Authorization Enforcement</h3>
-<p>Send a request to the model endpoint without a token (should get a 401 Unauthorized response):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>curl<span class="w"> </span>-sS<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>-d<span class="w"> </span><span class="s2">&quot;{\&quot;model\&quot;: \&quot;</span><span class="si">${</span><span class="nv">MODEL_NAME</span><span class="si">}</span><span class="s2">\&quot;, \&quot;messages\&quot;: [{\&quot;role\&quot;: \&quot;user\&quot;, \&quot;content\&quot;: \&quot;Hello\&quot;}], \&quot;max_tokens\&quot;: 50}&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">MODEL_URL</span><span class="si">}</span><span class="s2">/v1/chat/completions&quot;</span><span class="w"> </span>-v
-</code></pre></div>
-<h3 id="7-test-rate-limiting">7. Test Rate Limiting</h3>
-<p>Send multiple requests to trigger rate limit (should get 200 OK followed by 429 Rate Limit Exceeded after about 4 requests):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">for</span><span class="w"> </span>i<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="o">{</span><span class="m">1</span>..16<span class="o">}</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>curl<span class="w"> </span>-sS<span class="w"> </span>-o<span class="w"> </span>/dev/null<span class="w"> </span>-w<span class="w"> </span><span class="s2">&quot;%{http_code}\n&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$API_KEY</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span>-d<span class="w"> </span><span class="s2">&quot;{\&quot;model\&quot;: \&quot;</span><span class="si">${</span><span class="nv">MODEL_NAME</span><span class="si">}</span><span class="s2">\&quot;, \&quot;messages\&quot;: [{\&quot;role\&quot;: \&quot;user\&quot;, \&quot;content\&quot;: \&quot;Hello\&quot;}], \&quot;max_tokens\&quot;: 50}&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">MODEL_URL</span><span class="si">}</span><span class="s2">/v1/chat/completions&quot;</span>
-<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="k">done</span>
-</code></pre></div>
-<p>See the deployment scripts documentation at <code>scripts/README.md</code> and the <a href="../troubleshooting/">Troubleshooting</a> guide for more information.</p>
-<h2 id="automated-validation">Automated Validation</h2>
-<p>For faster validation, you can use the automated validation script to run the manual validation steps more quickly:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>./scripts/validate-deployment.sh
-</code></pre></div>
-<p>The script automates the manual validation steps above and provides detailed feedback with specific suggestions for fixing any issues found. This is useful when you need to quickly verify deployment status, but understanding the manual steps above helps with troubleshooting.</p>
-<h2 id="tls-verification">TLS Verification</h2>
-<p>TLS is enabled by default when deploying via the automated script or ODH overlay. Use <code>opendatahub</code> for ODH or <code>redhat-ods-applications</code> for RHOAI in the commands below.</p>
-<h3 id="check-certificate">Check Certificate</h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># View certificate details</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>maas-api-serving-cert<span class="w"> </span>-n<span class="w"> </span>&lt;application-namespace&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.data.tls\.crt}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span><span class="p">|</span><span class="w"> </span>openssl<span class="w"> </span>x509<span class="w"> </span>-text<span class="w"> </span>-noout
-<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
-<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="c1"># Check expiry</span>
-<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>maas-api-serving-cert<span class="w"> </span>-n<span class="w"> </span>&lt;application-namespace&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.data.tls\.crt}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span><span class="p">|</span><span class="w"> </span>openssl<span class="w"> </span>x509<span class="w"> </span>-enddate<span class="w"> </span>-noout
-</code></pre></div>
-<h3 id="test-https-endpoint">Test HTTPS Endpoint</h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Start port-forward (runs in foreground, use a separate terminal for the</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># commands below)</span>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>-n<span class="w"> </span>&lt;application-namespace&gt;<span class="w"> </span>svc/maas-api<span class="w"> </span><span class="m">8443</span>:8443
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
-<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1"># Extract the service CA for TLS verification</span>
-<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>oc<span class="w"> </span>get<span class="w"> </span>configmap<span class="w"> </span>-n<span class="w"> </span>openshift-config-managed<span class="w"> </span>service-ca-bundle<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.data.service-ca\.crt}&#39;</span><span class="w"> </span>&gt;<span class="w"> </span>/tmp/service-ca.crt
-<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>
-<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="c1"># Test health endpoint</span>
-<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="c1"># --resolve maps the service hostname to 127.0.0.1 so TLS hostname</span>
-<a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="c1"># verification succeeds over port-forward</span>
-<a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="nv">SVC_HOST</span><span class="o">=</span><span class="s2">&quot;maas-api.&lt;application-namespace&gt;.svc&quot;</span>
-<a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>curl<span class="w"> </span>-v<span class="w"> </span>--cacert<span class="w"> </span>/tmp/service-ca.crt<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">  </span>--resolve<span class="w"> </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">SVC_HOST</span><span class="si">}</span><span class="s2">:8443:127.0.0.1&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="w">  </span><span class="s2">&quot;https://</span><span class="si">${</span><span class="nv">SVC_HOST</span><span class="si">}</span><span class="s2">:8443/health&quot;</span>
-<a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>
-<a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="c1"># Check certificate chain</span>
-<a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a>openssl<span class="w"> </span>s_client<span class="w"> </span>-connect<span class="w"> </span>localhost:8443<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="w">  </span>-servername<span class="w"> </span>maas-api.&lt;application-namespace&gt;.svc
-</code></pre></div>
-<p>For detailed TLS configuration options, see <a href="../../configuration-and-management/tls-configuration/">TLS Configuration</a>.</p>
-<p>For troubleshooting common issues, see <a href="../troubleshooting/">Troubleshooting</a>.</p>
+<h2 id="see-also">See Also</h2>
+<ul>
+<li><a href="../../advanced-administration/external-oidc/">External OIDC Configuration</a> — JWKS cache TTL, monitoring, security controls</li>
+<li><a href="../api-key-authentication/">API Key Authentication</a> — API key creation flow and architecture</li>
+<li><a href="../../architecture-internals/authentication-internals/">Authentication Internals</a> — Gateway identity pipeline details</li>
+<li><a href="../../reference/crds/tenant/">Tenant CRD Reference</a> — Full Tenant spec including OIDC fields</li>
+<li><a href="../../reference/crds/ai-tenant/">AITenant CRD Reference</a> — AITenant spec including OIDC fields</li>
+</ul>
 
 
 
@@ -3429,7 +3351,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 7, 2026 14:37:02 UTC">May 7, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 8, 2026 22:18:29 UTC">July 8, 2026</span>
   </span>
 
     
@@ -3439,7 +3361,7 @@
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 30, 2025 20:53:11 UTC">October 30, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 8, 2026 22:18:29 UTC">July 8, 2026</span>
   </span>
 
     
