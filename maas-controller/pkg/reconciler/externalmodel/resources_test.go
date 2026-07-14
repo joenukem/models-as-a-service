@@ -89,12 +89,15 @@ func TestBuildHTTPRoute(t *testing.T) {
 	assert.Equal(t, "X-Gateway-Model-Name", string(rule2.Matches[0].Headers[0].Name))
 	assert.Equal(t, "gpt-4o", rule2.Matches[0].Headers[0].Value)
 
-	// Only Host header filter (required for TLS SNI), no URLRewrite
 	for i, rule := range hr.Spec.Rules {
-		assert.Len(t, rule.Filters, 1, "rule %d: must have exactly 1 filter (Host header)", i)
+		assert.Len(t, rule.Filters, 1, "rule %d: must have exactly 1 filter", i)
 		assert.Equal(t, gatewayapiv1.HTTPRouteFilterRequestHeaderModifier, rule.Filters[0].Type)
-		assert.Equal(t, "Host", string(rule.Filters[0].RequestHeaderModifier.Set[0].Name))
-		assert.Equal(t, "api.openai.com", rule.Filters[0].RequestHeaderModifier.Set[0].Value)
+		headers := rule.Filters[0].RequestHeaderModifier.Set
+		assert.Len(t, headers, 2, "rule %d: must set Host and X-Gateway-Model-Name", i)
+		assert.Equal(t, "Host", string(headers[0].Name))
+		assert.Equal(t, "api.openai.com", headers[0].Value)
+		assert.Equal(t, "X-Gateway-Model-Name", string(headers[1].Name))
+		assert.Equal(t, "gpt-4o", headers[1].Value)
 	}
 }
 
@@ -106,8 +109,13 @@ func TestBuildHTTPRoute_TargetModelDiffersFromName(t *testing.T) {
 	assert.Equal(t, "maas-my-bedrock", hr.Name)
 	assert.Equal(t, "/llm/my-bedrock", *hr.Spec.Rules[0].Matches[0].Path.Value)
 
-	// Header match uses targetModel (what the user sends in body.model)
+	// Header match uses targetModel for BBR re-routing
 	assert.Equal(t, "openai.gpt-oss-20b", hr.Spec.Rules[1].Matches[0].Headers[0].Value)
+
+	// X-Gateway-Model-Name filter uses ExternalModel CR name (modelName), not targetModel
+	headers := hr.Spec.Rules[0].Filters[0].RequestHeaderModifier.Set
+	assert.Equal(t, "X-Gateway-Model-Name", string(headers[1].Name))
+	assert.Equal(t, "my-bedrock", headers[1].Value)
 
 	// BackendRef uses the MaaS-owned Service name.
 	assert.Equal(t, "maas-my-bedrock", string(hr.Spec.Rules[0].BackendRefs[0].Name))
