@@ -77,7 +77,7 @@ func TestBuildHTTPRoute(t *testing.T) {
 	assert.Equal(t, "openshift-ingress", string(*hr.Spec.ParentRefs[0].Namespace))
 
 	// Must have 2 rules: path-based and header-based
-	assert.Len(t, hr.Spec.Rules, 2)
+	require.Len(t, hr.Spec.Rules, 2)
 
 	// Rule 1: path-based match with namespace prefix
 	rule1 := hr.Spec.Rules[0]
@@ -90,10 +90,11 @@ func TestBuildHTTPRoute(t *testing.T) {
 	assert.Equal(t, "gpt-4o", rule2.Matches[0].Headers[0].Value)
 
 	for i, rule := range hr.Spec.Rules {
-		assert.Len(t, rule.Filters, 1, "rule %d: must have exactly 1 filter", i)
+		require.Len(t, rule.Filters, 1, "rule %d: must have exactly 1 filter", i)
 		assert.Equal(t, gatewayapiv1.HTTPRouteFilterRequestHeaderModifier, rule.Filters[0].Type)
+		require.NotNil(t, rule.Filters[0].RequestHeaderModifier, "rule %d: RequestHeaderModifier must not be nil", i)
 		headers := rule.Filters[0].RequestHeaderModifier.Set
-		assert.Len(t, headers, 2, "rule %d: must set Host and X-Gateway-Model-Name", i)
+		require.Len(t, headers, 2, "rule %d: must set Host and X-Gateway-Model-Name", i)
 		assert.Equal(t, "Host", string(headers[0].Name))
 		assert.Equal(t, "api.openai.com", headers[0].Value)
 		assert.Equal(t, "X-Gateway-Model-Name", string(headers[1].Name))
@@ -113,7 +114,10 @@ func TestBuildHTTPRoute_TargetModelDiffersFromName(t *testing.T) {
 	assert.Equal(t, "openai.gpt-oss-20b", hr.Spec.Rules[1].Matches[0].Headers[0].Value)
 
 	// X-Gateway-Model-Name filter uses ExternalModel CR name (modelName), not targetModel
+	require.Len(t, hr.Spec.Rules[0].Filters, 1, "rule 0: must have exactly 1 filter")
+	require.NotNil(t, hr.Spec.Rules[0].Filters[0].RequestHeaderModifier, "rule 0: RequestHeaderModifier must not be nil")
 	headers := hr.Spec.Rules[0].Filters[0].RequestHeaderModifier.Set
+	require.Len(t, headers, 2, "rule 0: must set Host and X-Gateway-Model-Name")
 	assert.Equal(t, "X-Gateway-Model-Name", string(headers[1].Name))
 	assert.Equal(t, "my-bedrock", headers[1].Value)
 
