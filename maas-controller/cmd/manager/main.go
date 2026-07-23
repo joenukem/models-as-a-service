@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	stderrors "errors"
 	"flag"
 	"fmt"
@@ -27,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	kservev1alpha1 "github.com/kserve/kserve/pkg/apis/serving/v1alpha1"
+	kservev1alpha2 "github.com/kserve/kserve/pkg/apis/serving/v1alpha2"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -68,12 +69,12 @@ const defaultAITenantBootstrappedAnnotation = "maas.opendatahub.io/default-aiten
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(extv1.AddToScheme(scheme))
-	utilruntime.Must(kservev1alpha1.AddToScheme(scheme))
+	utilruntime.Must(kservev1alpha2.AddToScheme(scheme))
 	utilruntime.Must(gatewayapiv1.Install(scheme))
 	utilruntime.Must(maasv1alpha1.AddToScheme(scheme))
 }
 
-//+kubebuilder:rbac:groups="",resources=namespaces,verbs=get;create
+//+kubebuilder:rbac:groups="",resources=namespaces,verbs=get;create;patch
 
 // ensureManagedNamespaceWithClient checks whether a controller-managed namespace exists
 // and creates it if missing. It checks for existence first so that the controller can
@@ -135,7 +136,7 @@ func ensureManagedNamespaceWithClient(ctx context.Context, namespace, purpose st
 		} else {
 			setupLog.Info("managed namespace already exists",
 				"namespace", namespace, "purpose", purpose, "phase", ns.Status.Phase)
-			return nil
+			return ensureManagedNamespaceLabels(ctx, ns, namespace, purpose, clientset)
 		}
 	}
 
@@ -155,14 +156,14 @@ func ensureManagedNamespaceWithClient(ctx context.Context, namespace, purpose st
 		Duration: 1 * time.Second,
 		Factor:   2.0,
 	}, func(ctx context.Context) (bool, error) {
+		labels := make(map[string]string, len(managedNamespaceLabels))
+		for k, v := range managedNamespaceLabels {
+			labels[k] = v
+		}
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: namespace,
-				Labels: map[string]string{
-					"opendatahub.io/generated-namespace": "true",
-					"app.kubernetes.io/managed-by":       "maas-controller",
-					"app.kubernetes.io/part-of":          "maas-controller",
-				},
+				Name:   namespace,
+				Labels: labels,
 			},
 		}
 
@@ -181,6 +182,9 @@ func ensureManagedNamespaceWithClient(ctx context.Context, namespace, purpose st
 				return false, nil
 			}
 			if existingNs.Status.Phase == corev1.NamespaceActive || existingNs.Status.Phase == "" {
+				if labelErr := ensureManagedNamespaceLabels(ctx, existingNs, namespace, purpose, clientset); labelErr != nil {
+					return false, labelErr
+				}
 				setupLog.Info("managed namespace ready", "namespace", namespace, "purpose", purpose)
 				return true, nil
 			}
@@ -196,6 +200,34 @@ func ensureManagedNamespaceWithClient(ctx context.Context, namespace, purpose st
 		setupLog.Info("retrying namespace creation", "namespace", namespace, "purpose", purpose, "error", err)
 		return false, nil // transient error, retry
 	})
+}
+
+var managedNamespaceLabels = map[string]string{
+	"opendatahub.io/generated-namespace": "true",
+	"app.kubernetes.io/managed-by":       "maas-controller",
+	"app.kubernetes.io/part-of":          "maas-controller",
+}
+
+const networkPolicyRequiredLabel = "opendatahub.io/generated-namespace"
+
+// ensureManagedNamespaceLabels ensures the opendatahub.io/generated-namespace
+// label is present on an existing namespace. This handles the upgrade path
+// where the namespace is pre-created by the operator without the label that
+// the DSCI NetworkPolicy requires for ingress. Only the NetworkPolicy-required
+// label is patched; ownership labels (managed-by, part-of) are left as-is
+// since the namespace may be legitimately managed by another component.
+func ensureManagedNamespaceLabels(ctx context.Context, ns *corev1.Namespace, namespace, purpose string, clientset kubernetes.Interface) error {
+	if ns.Labels != nil && ns.Labels[networkPolicyRequiredLabel] == "true" {
+		return nil
+	}
+	patchData := []byte(`{"metadata":{"labels":{"` + networkPolicyRequiredLabel + `":"true"}}}`)
+	_, err := clientset.CoreV1().Namespaces().Patch(ctx, namespace, types.MergePatchType, patchData, metav1.PatchOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to patch %s label on existing namespace %q: %w", networkPolicyRequiredLabel, namespace, err)
+	}
+	setupLog.Info("added NetworkPolicy-required label to existing managed namespace",
+		"namespace", namespace, "purpose", purpose)
+	return nil
 }
 
 func subscriptionNamespaceExists(ctx context.Context, namespace string, clientset kubernetes.Interface) (bool, error) {
@@ -370,6 +402,11 @@ type managedNamespaceMonitor struct {
 	purpose            string
 	interval           time.Duration
 	needLeaderElection bool
+	// pauseCondition, if set, is evaluated before each tick; returning true skips
+	// ensureManagedNamespaceWithClient for that tick (e.g. to avoid recreating a
+	// namespace that is being intentionally torn down). A returned error also skips
+	// the tick (fail-closed) and is logged; the next tick will retry.
+	pauseCondition func(ctx context.Context) (bool, error)
 }
 
 func (m *managedNamespaceMonitor) NeedLeaderElection() bool {
@@ -383,6 +420,18 @@ func (m *managedNamespaceMonitor) Start(ctx context.Context) error {
 	run := func() {
 		innerCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancel()
+		if m.pauseCondition != nil {
+			pause, err := m.pauseCondition(innerCtx)
+			if err != nil {
+				setupLog.Error(err, "unable to evaluate pause condition before namespace maintenance", "namespace", m.namespace, "purpose", m.purpose)
+				return
+			}
+			if pause {
+				setupLog.V(1).Info("skipping namespace maintenance; pause condition active",
+					"namespace", m.namespace, "purpose", m.purpose)
+				return
+			}
+		}
 		if err := ensureManagedNamespaceWithClient(innerCtx, m.namespace, m.purpose, m.clientset); err != nil {
 			// Keep running; the next tick will retry. Alerting on sustained failure is better done via
 			// metrics (e.g. Prometheus counter) in a follow-up if product needs it.
@@ -399,6 +448,23 @@ func (m *managedNamespaceMonitor) Start(ctx context.Context) error {
 		case <-ticker.C:
 			run()
 		}
+	}
+}
+
+// aitenantTeardownPauseCondition builds a managedNamespaceMonitor pauseCondition that skips
+// AITenant namespace self-heal while the maas-controller Deployment advertises teardown
+// (or is already gone), so the monitor cannot recreate ai-tenants while cleanup is in
+// progress or the controller pod is winding down.
+func aitenantTeardownPauseCondition(reader client.Reader, deploymentKey client.ObjectKey) func(context.Context) (bool, error) {
+	return func(ctx context.Context) (bool, error) {
+		var dep appsv1.Deployment
+		if err := reader.Get(ctx, deploymentKey, &dep); err != nil {
+			if errors.IsNotFound(err) {
+				return true, nil
+			}
+			return false, err
+		}
+		return maas.TeardownRequestedOnDeployment(&dep), nil
 	}
 }
 
@@ -447,6 +513,9 @@ func ensureDefaultAITenantBootstrap(ctx context.Context, c client.Client, tenant
 		return false, fmt.Errorf("get maas-controller Deployment for bootstrap gate: %w", err)
 	}
 	if !dep.DeletionTimestamp.IsZero() {
+		return false, nil
+	}
+	if maas.TeardownRequestedOnDeployment(&dep) {
 		return false, nil
 	}
 
@@ -637,6 +706,7 @@ func main() {
 	var enableTenantNamespaceDiscovery bool
 	var observabilityManifestsPath string
 	var monitoringNamespace string
+	var usageLogsManifestPath string
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metrics endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -649,6 +719,7 @@ func main() {
 		"Infrastructure namespace for maas-api, postgres, and maas-db-config. "+
 			"Defaults to 'AUTO' (namespace separation enabled). Set to empty string to disable for ROSA.")
 	flag.StringVar(&observabilityManifestsPath, "observability-manifests-path", "/deployment/components/observability/observability/dashboards", "Path to observability dashboard kustomize manifests.")
+	flag.StringVar(&usageLogsManifestPath, "usage-logs-manifest-path", "/deployment/components/observability/usage-logs", "Path to usage logs kustomize manifests.")
 	flag.StringVar(&monitoringNamespace, "monitoring-namespace", "opendatahub", "The namespace where the monitoring stack is deployed.")
 	flag.StringVar(&maasSubscriptionNamespace, "maas-subscription-namespace", "models-as-a-service", "The namespace to watch for MaaS CRs.")
 	flag.StringVar(&aitenantNamespace, "aitenant-namespace", tenantreconcile.DefaultAITenantNamespace, "The infrastructure namespace where AITenant CRs are accepted.")
@@ -782,9 +853,16 @@ func main() {
 	}
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
-		Scheme:                 scheme,
-		Cache:                  cacheOpts,
-		Metrics:                metricsserver.Options{BindAddress: metricsAddr},
+		Scheme: scheme,
+		Cache:  cacheOpts,
+		Metrics: metricsserver.Options{
+			BindAddress: metricsAddr,
+			TLSOpts: []func(*tls.Config){
+				func(c *tls.Config) {
+					c.NextProtos = []string{"h2", "http/1.1"}
+				},
+			},
+		},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "maas-controller.models-as-a-service.opendatahub.io",
@@ -872,6 +950,10 @@ func main() {
 		purpose:            "aitenant",
 		interval:           subscriptionNamespaceMaintainInterval,
 		needLeaderElection: enableLeaderElection,
+		pauseCondition: aitenantTeardownPauseCondition(
+			mgr.GetAPIReader(),
+			client.ObjectKey{Name: tenantreconcile.MaaSControllerDeploymentName, Namespace: controllerNamespace},
+		),
 	}); err != nil {
 		setupLog.Error(err, "unable to add AITenant namespace monitor")
 		os.Exit(1)
@@ -922,6 +1004,7 @@ func main() {
 		TenantSubscriptionNamespace: maasSubscriptionNamespace,
 		AITenantNamespace:           aitenantNamespace,
 		ObservabilityManifestsPath:  observabilityManifestsPath,
+		UsageLogsManifestPath:       usageLogsManifestPath,
 		MonitoringNamespace:         monitoringNamespace,
 		GatewayNamespace:            gatewayNamespace,
 	}).SetupWithManager(mgr); err != nil {
