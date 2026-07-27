@@ -5,6 +5,15 @@
 
 This guide walks through deploying an external AI/ML model (e.g., OpenAI, Anthropic) through the MaaS gateway. External models are hosted outside the cluster — MaaS handles authentication, rate limiting, and API key management while routing inference requests to the external provider.
 
+## Multi-Tenant Limitation
+
+!!! danger "External models are not supported in multi-tenant deployments"
+    When multiple AITenants are deployed, each tenant gets a dedicated Gateway and Inference Payload Processor (IPP) stack. The ExternalModel reconciler is not tenant-aware — it always creates HTTPRoutes pointing to the default tenant's gateway (`--gateway-name` / `--gateway-namespace` controller flags). Each tenant's IPP EnvoyFilter targets its own gateway, which conflicts with the ExternalModel HTTPRoute's static gateway reference.
+
+    **Result:** External models do not work for any tenant — including the default tenant — when multiple IPP instances are running.
+
+    External models are only supported in single-tenant deployments. This limitation is tracked for a future fix.
+
 ## Prerequisites
 
 - MaaS platform deployed per the [Installation Guide](maas-setup.md)
@@ -143,6 +152,43 @@ Expected output:
 NAME     PHASE   ENDPOINT                                    HTTPROUTE   GATEWAY
 gpt-4o   Ready   https://maas.<cluster-domain>/llm/gpt-4o   maas-gpt-4o maas-default-gateway
 ```
+
+## Annotations
+
+ExternalModel supports optional annotations to control networking behavior:
+
+| Annotation | Required | Default | Description |
+|------------|----------|---------|-------------|
+| `maas.opendatahub.io/tls` | No | `true` | Controls TLS origination to the external endpoint. Set to `false` for non-TLS endpoints. |
+| `maas.opendatahub.io/port` | No | `443` | Overrides the default port for the external endpoint. Valid range: 1–65535; values outside this range are rejected during reconciliation. |
+
+By default, the ExternalModel reconciler enables TLS origination — the Istio sidecar performs the TLS handshake with the external provider. This is the correct setting for public providers like OpenAI and Anthropic.
+
+For internal endpoints that do not use TLS (e.g., a self-hosted vLLM instance), disable TLS origination and set the appropriate port:
+
+!!! warning "Cleartext credential traffic"
+    Disabling TLS while `credentialRef` is set means the provider API key is sent in cleartext between the gateway and the endpoint. Only use non-TLS mode on a trusted, isolated network.
+
+```yaml
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: ExternalModel
+metadata:
+  name: internal-vllm
+  namespace: llm
+  annotations:
+    maas.opendatahub.io/tls: "false"
+    maas.opendatahub.io/port: "8000"
+spec:
+  provider: openai
+  endpoint: vllm.internal.example.com
+  targetModel: my-model
+  credentialRef:
+    name: vllm-api-key
+```
+
+When TLS is disabled, the reconciler creates the ServiceEntry with HTTP protocol instead of HTTPS and does not create a DestinationRule. Any existing controller-managed DestinationRule is deleted; DestinationRules annotated with `opendatahub.io/managed: "false"` are preserved.
+
+For full annotation details, see the [ExternalModel CRD Reference](../reference/crds/external-model.md#annotations).
 
 ## Step 5: Configure Access and Rate Limits
 

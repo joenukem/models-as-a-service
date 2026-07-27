@@ -21,17 +21,22 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	netwv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer/yaml"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
@@ -55,14 +60,28 @@ const CleanupFinalizer = "maas.opendatahub.io/cleanup"
 // envoyFilterManifestPath is the absolute path to the EnvoyFilter manifest inside the container.
 const envoyFilterManifestPath = "/deployment/components/observability/usage-logs/envoy-otel-access-log.yaml"
 
+// usageLogsCollectorName is the OpenTelemetryCollector resource for gateway usage logs.
+const usageLogsCollectorName = "usage-logs"
+
+// usageLogsTenancyProxyDeploymentName is the Deployment for the Loki query tenancy proxy.
+const usageLogsTenancyProxyDeploymentName = "usage-logs-tenancy-proxy"
+
+// usageLogsTenancyProxyContainerName is the proxy container in the tenancy proxy Deployment.
+const usageLogsTenancyProxyContainerName = "proxy"
+
 // envoyFilterName is the name of the usage-logs EnvoyFilter resource.
 const envoyFilterName = "maas-model-access-logs"
 
 // LifecycleReconciler watches the maas-controller Deployment. It is the sole creator of the
 // cluster-scoped Config/default anchor when the Deployment exists and is not terminating (so
 // standalone installs do not race applying a Config manifest before the Config CRD is ready).
-// It links the Deployment, default AITenant, and default MaasTenantConfig to Config via non-controller
-// ownerReferences (same relationship shape for all). Legacy CleanupFinalizer entries are removed when present.
+// It links the default AITenant and default MaasTenantConfig to Config via non-controller
+// ownerReferences. The Deployment itself deliberately does NOT get an ownerReference to
+// Config: this reconciler's own workload must keep running independent of Config's lifecycle
+// (self-heal after an accidental Config deletion, and reporting TeardownCompletedAnnotation
+// once Config is deleted during teardown), so it must not be a GC dependent of the resource
+// it manages. Legacy CleanupFinalizer entries and any legacy Deployment->Config
+// ownerReference (set by older maas-controller versions) are removed when present.
 type LifecycleReconciler struct {
 	client.Client
 	Scheme                      *runtime.Scheme
@@ -74,6 +93,7 @@ type LifecycleReconciler struct {
 	ObservabilityManifestsPath  string
 	MonitoringNamespace         string
 	EnvoyFilterManifestPath     string
+	UsageLogsManifestPath       string
 }
 
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;update;patch
@@ -83,6 +103,8 @@ type LifecycleReconciler struct {
 //+kubebuilder:rbac:groups=maas.opendatahub.io,resources=aitenants,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=perses.dev,resources=persesdashboards;persesdatasources,verbs=get;list;watch;create;patch;delete
 //+kubebuilder:rbac:groups=networking.istio.io,resources=envoyfilters,verbs=get;list;watch;create;patch;delete
+//+kubebuilder:rbac:groups=opentelemetry.io,resources=opentelemetrycollectors,verbs=get;list;watch;create;patch;delete
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,verbs=get;list;watch;create;patch;delete
 
 func (r *LifecycleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.Log.WithName("self-deployment").WithValues("deployment", req.NamespacedName)
@@ -93,15 +115,25 @@ func (r *LifecycleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	if dep.DeletionTimestamp.IsZero() {
-		if res, err := r.ensureSingletonConfig(ctx, &dep); err != nil {
+		// Strip before anything else so that, if teardown is requested below, Config
+		// deletion can never cascade-delete the Deployment via a stale ownerReference
+		// from a pre-self-teardown install.
+		if err := r.stripLegacyDeploymentConfigOwnerReference(ctx, log, req.NamespacedName); err != nil {
 			return ctrl.Result{}, err
-		} else if res != nil {
+		}
+		teardownRequested := TeardownRequestedOnDeployment(&dep)
+		cfg, res, err := r.ensureSingletonConfig(ctx, &dep)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if res != nil {
 			return *res, nil
 		}
-		if res, err := r.ensureDeploymentReferencesConfig(ctx, req.NamespacedName); err != nil {
-			return ctrl.Result{}, err
-		} else if res != nil {
-			return *res, nil
+		if teardownRequested {
+			if cfg == nil {
+				log.Info("teardown requested on maas-controller Deployment; running best-effort cleanup without Config/default")
+			}
+			return r.handleRequestedTeardown(ctx, &dep, cfg)
 		}
 		if res, err := r.ensureDefaultAITenantReferencesConfig(ctx); err != nil {
 			return ctrl.Result{}, err
@@ -199,26 +231,72 @@ func (r *LifecycleReconciler) stripLegacyCleanupFinalizer(ctx context.Context, l
 	return nil
 }
 
+// stripLegacyDeploymentConfigOwnerReference removes an ownerReference from the Deployment
+// to Config/default if present. Pre-self-teardown maas-controller versions set this
+// non-controller ownerReference (see the removed ensureDeploymentReferencesConfig); it must
+// not survive an upgrade, or deleting Config could cascade-delete the Deployment itself
+// before this reconciler can report TeardownCompletedAnnotation. New installs never set
+// this ownerReference, so this is a no-op for them.
+func (r *LifecycleReconciler) stripLegacyDeploymentConfigOwnerReference(ctx context.Context, log logr.Logger, key types.NamespacedName) error {
+	var dep appsv1.Deployment
+	if err := r.Get(ctx, key, &dep); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+
+	filtered := make([]metav1.OwnerReference, 0, len(dep.OwnerReferences))
+	changed := false
+	for _, ref := range dep.OwnerReferences {
+		if isConfigOwnerReference(ref) {
+			changed = true
+			continue
+		}
+		filtered = append(filtered, ref)
+	}
+	if !changed {
+		return nil
+	}
+
+	base := dep.DeepCopy()
+	dep.OwnerReferences = filtered
+	if err := r.Patch(ctx, &dep, client.MergeFrom(base)); err != nil {
+		return fmt.Errorf("remove legacy Config owner reference from Deployment: %w", err)
+	}
+	log.Info("removed legacy Config owner reference from Deployment")
+	return nil
+}
+
+// isConfigOwnerReference reports whether ref points at the singleton Config/default
+// resource. Config is cluster-scoped and singleton, so matching by name (in addition to
+// kind and API version) is precise without needing to fetch Config to compare UIDs.
+func isConfigOwnerReference(ref metav1.OwnerReference) bool {
+	return ref.Kind == maasv1alpha1.ConfigKind &&
+		ref.APIVersion == maasv1alpha1.GroupVersion.String() &&
+		ref.Name == maasv1alpha1.ConfigInstanceName
+}
+
 // ensureSingletonConfig creates Config/default when it is missing and the watched Deployment
 // is still running. If Config is terminating, requeues until teardown completes (avoids racing
 // intentional anchor deletion). After accidental deletion while the Deployment remains, the
 // anchor is recreated on a later reconcile.
-func (r *LifecycleReconciler) ensureSingletonConfig(ctx context.Context, dep *appsv1.Deployment) (*ctrl.Result, error) {
+func (r *LifecycleReconciler) ensureSingletonConfig(ctx context.Context, dep *appsv1.Deployment) (*maasv1alpha1.Config, *ctrl.Result, error) {
 	if dep == nil || !dep.DeletionTimestamp.IsZero() {
-		return nil, nil
+		return nil, nil, nil
 	}
 	key := client.ObjectKey{Name: maasv1alpha1.ConfigInstanceName}
 	var cfg maasv1alpha1.Config
 	switch err := r.Get(ctx, key, &cfg); {
 	case err == nil:
 		if !cfg.DeletionTimestamp.IsZero() {
-			return &ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+			return &cfg, nil, nil
 		}
 		if cfg.UID == "" {
-			return &ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+			return nil, &ctrl.Result{RequeueAfter: 2 * time.Second}, nil
 		}
-		return nil, nil
+		return &cfg, nil, nil
 	case apierrors.IsNotFound(err):
+		if TeardownRequestedOnDeployment(dep) {
+			return nil, nil, nil
+		}
 		toCreate := &maasv1alpha1.Config{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: maasv1alpha1.GroupVersion.String(),
@@ -227,72 +305,21 @@ func (r *LifecycleReconciler) ensureSingletonConfig(ctx context.Context, dep *ap
 			ObjectMeta: metav1.ObjectMeta{Name: maasv1alpha1.ConfigInstanceName},
 		}
 		if err := r.Create(ctx, toCreate); err != nil && !apierrors.IsAlreadyExists(err) {
-			return nil, err
+			return nil, nil, err
 		}
 		if err := r.Get(ctx, key, &cfg); err != nil {
 			if apierrors.IsNotFound(err) {
-				return &ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+				return nil, &ctrl.Result{RequeueAfter: 2 * time.Second}, nil
 			}
-			return nil, err
+			return nil, nil, err
 		}
 		if cfg.UID == "" {
-			return &ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+			return nil, &ctrl.Result{RequeueAfter: 2 * time.Second}, nil
 		}
-		return nil, nil
+		return &cfg, nil, nil
 	default:
-		return nil, err
+		return nil, nil, err
 	}
-}
-
-// ensureDeploymentReferencesConfig links the controller Deployment to Config/default
-// via a non-controller ownerReference so the workload participates in the same GC graph as other
-// operands without competing with the ODH operator's controller owner (when present).
-//
-// Call after ensureSingletonConfig in the same reconcile: Config should exist with a UID and
-// not be terminating. If this function still observes a missing, terminating, or UID-less anchor
-// (cache lag or races), it logs and returns a short requeue instead of succeeding with no work.
-func (r *LifecycleReconciler) ensureDeploymentReferencesConfig(ctx context.Context, key types.NamespacedName) (*ctrl.Result, error) {
-	log := ctrl.LoggerFrom(ctx).WithValues("deployment", key)
-	if r.Scheme == nil {
-		return nil, nil
-	}
-	var cfg maasv1alpha1.Config
-	if err := r.Get(ctx, client.ObjectKey{Name: maasv1alpha1.ConfigInstanceName}, &cfg); err != nil {
-		if apierrors.IsNotFound(err) {
-			log.Info("Config anchor not found when linking Deployment; requeueing (singleton reconcile should create it)")
-			res := ctrl.Result{RequeueAfter: 2 * time.Second}
-			return &res, nil
-		}
-		return nil, err
-	}
-	if !cfg.DeletionTimestamp.IsZero() {
-		log.Info("Config anchor is terminating when linking Deployment; requeueing until teardown completes")
-		res := ctrl.Result{RequeueAfter: 10 * time.Second}
-		return &res, nil
-	}
-	if cfg.UID == "" {
-		log.Info("Config anchor has no UID yet when linking Deployment; requeueing")
-		res := ctrl.Result{RequeueAfter: 2 * time.Second}
-		return &res, nil
-	}
-	var dep appsv1.Deployment
-	if err := r.Get(ctx, key, &dep); err != nil {
-		return nil, client.IgnoreNotFound(err)
-	}
-	for _, ref := range dep.OwnerReferences {
-		if ref.UID == cfg.UID && ref.Kind == maasv1alpha1.ConfigKind && ref.APIVersion == maasv1alpha1.GroupVersion.String() {
-			return nil, nil
-		}
-	}
-	base := dep.DeepCopy()
-	if err := controllerutil.SetOwnerReference(&cfg, &dep, r.Scheme); err != nil {
-		return nil, fmt.Errorf("set Config owner reference on deployment: %w", err)
-	}
-	if err := r.Patch(ctx, &dep, client.MergeFrom(base)); err != nil {
-		return nil, fmt.Errorf("patch deployment ownerReferences: %w", err)
-	}
-	log.Info("set Config owner reference on maas-controller Deployment")
-	return nil, nil
 }
 
 // ensureTenantReferencesConfig links MaasTenantConfig/default-tenant to Config/default via the same non-controller
@@ -370,6 +397,21 @@ func aitenantReferencesConfig(aitenant *maasv1alpha1.AITenant, ct *maasv1alpha1.
 }
 
 func (r *LifecycleReconciler) ensureObservability(ctx context.Context, log logr.Logger) error {
+	if r.MonitoringNamespace == "" {
+		log.V(1).Info("monitoring namespace not configured; skipping observability setup")
+		return nil
+	}
+
+	var ns corev1.Namespace
+	if err := r.Get(ctx, client.ObjectKey{Name: r.MonitoringNamespace}, &ns); err != nil {
+		if apierrors.IsNotFound(err) {
+			log.Info("monitoring namespace does not exist; skipping observability setup",
+				"namespace", r.MonitoringNamespace)
+			return nil
+		}
+		return fmt.Errorf("checking monitoring namespace %q: %w", r.MonitoringNamespace, err)
+	}
+
 	if err := r.ensureLimitadorServiceMonitor(ctx); err != nil {
 		return err
 	}
@@ -377,6 +419,9 @@ func (r *LifecycleReconciler) ensureObservability(ctx context.Context, log logr.
 		return err
 	}
 	if err := r.ensureUsageLogsEnvoyFilter(ctx, log); err != nil {
+		return err
+	}
+	if err := r.ensureUsageLogs(ctx, log); err != nil {
 		return err
 	}
 	return nil
@@ -497,6 +542,207 @@ func (r *LifecycleReconciler) ensureUsageDashboard(ctx context.Context, log logr
 	return nil
 }
 
+// ensureUsageLogs deploys or removes OTel collector and RBAC for usage logging based on
+// the Config's usageLogging feature gate.
+func (r *LifecycleReconciler) ensureUsageLogs(ctx context.Context, log logr.Logger) error {
+	if r.UsageLogsManifestPath == "" {
+		log.Info("WARNING: Usage logs manifest path not configured; skipping usage logs")
+		return nil
+	}
+
+	var cfg maasv1alpha1.Config
+	if err := r.Get(ctx, client.ObjectKey{Name: maasv1alpha1.ConfigInstanceName}, &cfg); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	resources, err := tenantreconcile.RenderKustomize(r.UsageLogsManifestPath, r.MonitoringNamespace)
+	if err != nil {
+		return fmt.Errorf("render usage logs: %w", err)
+	}
+
+	if !ptr.Deref(cfg.Spec.UsageLogging, false) {
+		for _, resource := range resources {
+			res := resource.DeepCopy()
+			key := client.ObjectKeyFromObject(res)
+			existing := &unstructured.Unstructured{}
+			existing.SetGroupVersionKind(res.GroupVersionKind())
+
+			if err := r.Get(ctx, key, existing); err != nil {
+				if apierrors.IsNotFound(err) || apimeta.IsNoMatchError(err) {
+					continue
+				}
+				return fmt.Errorf("get %s %s/%s before delete: %w", res.GetKind(), res.GetNamespace(), res.GetName(), err)
+			}
+
+			if !isOwnedByConfigOrController(existing, cfg.UID) {
+				log.V(1).Info("skipping deletion of unowned usage-logs resource",
+					"kind", res.GetKind(), "name", res.GetName(), "namespace", res.GetNamespace())
+				continue
+			}
+
+			if err := r.Delete(ctx, existing); err != nil {
+				if apierrors.IsNotFound(err) {
+					continue
+				}
+				return fmt.Errorf("delete %s %s/%s: %w", res.GetKind(), res.GetNamespace(), res.GetName(), err)
+			}
+			log.V(1).Info("deleted usage-logs resource (usageLogging disabled)",
+				"kind", res.GetKind(), "name", res.GetName(), "namespace", res.GetNamespace())
+		}
+	} else {
+		// Track if the collector is skipped due to missing CRD (CWE-863).
+		// If the OpenTelemetryCollector CRD is unavailable, we must skip the entire
+		// bundle to prevent orphaned ClusterRoleBinding from granting cluster-logging-application-write
+		// permissions to a ServiceAccount (usage-logs-collector) that anyone could then create and exploit.
+		collectorSkipped := false
+
+		for _, resource := range resources {
+			res := resource // avoid loop variable aliasing
+			if err := patchTenancyProxyImage(&res); err != nil {
+				return fmt.Errorf("patch %s %s: %w", res.GetKind(), res.GetName(), err)
+			}
+			if err := patchPersesDatasourceURL(&res); err != nil {
+				return fmt.Errorf("patch %s %s: %w", res.GetKind(), res.GetName(), err)
+			}
+			if err := controllerutil.SetControllerReference(&cfg, &res, r.Scheme); err != nil {
+				return fmt.Errorf("set controller reference on %s %s: %w", res.GetKind(), res.GetName(), err)
+			}
+
+			if err := r.Patch(ctx, &res, client.Apply, client.ForceOwnership, client.FieldOwner("maas-controller")); err != nil {
+				if isOptionalAPIGroup(res.GroupVersionKind().Group) && (apimeta.IsNoMatchError(err) || apierrors.IsNotFound(err)) {
+					log.Info("skipping usage-logs resource: optional CRD not yet registered, will apply once installed",
+						"group", res.GroupVersionKind().Group, "kind", res.GetKind(),
+						"name", res.GetName(), "namespace", res.GetNamespace())
+					if res.GetKind() == "OpenTelemetryCollector" {
+						collectorSkipped = true
+					}
+					continue
+				}
+				return fmt.Errorf("apply %s %s/%s: %w", res.GetKind(), res.GetNamespace(), res.GetName(), err)
+			}
+		}
+
+		// If the collector was skipped, delete any orphaned RBAC resources that may have
+		// been created in a prior reconcile when the CRD was available (CWE-863).
+		if collectorSkipped {
+			gvkClusterRoleBinding := schema.GroupVersionKind{
+				Group: "rbac.authorization.k8s.io", Version: "v1", Kind: "ClusterRoleBinding",
+			}
+			crb := &unstructured.Unstructured{}
+			crb.SetGroupVersionKind(gvkClusterRoleBinding)
+			crb.SetName("usage-collector-application-logs-write")
+
+			if err := r.Get(ctx, client.ObjectKeyFromObject(crb), crb); err == nil {
+				if isOwnedByConfigOrController(crb, cfg.UID) {
+					if err := r.Delete(ctx, crb); err != nil && !apierrors.IsNotFound(err) {
+						return fmt.Errorf("delete orphaned ClusterRoleBinding after collector skip: %w", err)
+					}
+					log.Info("deleted orphaned usage-logs ClusterRoleBinding (collector CRD unavailable)")
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// isOwnedByConfigOrController verifies whether a resource is owned by the Config controller
+// or has the trusted managed-by label. This prevents accidental deletion of pre-existing
+// foreign resources with the same name (CWE-284).
+func isOwnedByConfigOrController(obj client.Object, configUID types.UID) bool {
+	// Check if owned by Config via OwnerReferences
+	for _, ref := range obj.GetOwnerReferences() {
+		if ref.UID == configUID && ref.Controller != nil && *ref.Controller {
+			return true
+		}
+	}
+
+	// Check for trusted managed-by label
+	labels := obj.GetLabels()
+	if labels != nil && labels["app.kubernetes.io/managed-by"] == "maas-controller" {
+		return true
+	}
+
+	return false
+}
+
+// patchPersesDatasourceURL expands short service references in PersesDatasource URLs to FQDNs.
+// Rewrites URLs like "https://service-name:port" to "https://service-name.{namespace}.svc:port"
+// using the datasource's deployed namespace. This allows YAML to use simple service references
+// while ensuring they work correctly in any namespace.
+func patchPersesDatasourceURL(res *unstructured.Unstructured) error {
+	if res.GetKind() != "PersesDatasource" {
+		return nil
+	}
+
+	namespace := res.GetNamespace()
+	if namespace == "" {
+		// No namespace set, skip patching
+		return nil
+	}
+
+	urlPath := []string{"spec", "config", "plugin", "spec", "proxy", "spec", "url"}
+	url, found, err := unstructured.NestedString(res.Object, urlPath...)
+	if err != nil {
+		return fmt.Errorf("read datasource URL: %w", err)
+	}
+	if !found {
+		// URL field doesn't exist in this datasource
+		return nil
+	}
+
+	// Only patch if URL doesn't already have .svc (i.e., it's a short service reference)
+	if !strings.Contains(url, ".svc") {
+		// Pattern: https://service-name:port/path -> https://service-name.{namespace}.svc:port/path
+		// Use regex to insert .{namespace}.svc before the port
+		re := regexp.MustCompile(`(https?://[^:]+)(:\d+)`)
+		patchedURL := re.ReplaceAllString(url, fmt.Sprintf("$1.%s.svc$2", namespace))
+
+		if err := unstructured.SetNestedField(res.Object, patchedURL, urlPath...); err != nil {
+			return fmt.Errorf("set datasource URL: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// patchTenancyProxyImage sets the tenancy-proxy container image to RELATED_IMAGE_ODH_PYTHON_312_IMAGE
+// if configured, otherwise uses DefaultUsageLogsTenancyProxyImage. This enables disconnected deployments
+// to mirror the image while maintaining a code-defined default.
+func patchTenancyProxyImage(res *unstructured.Unstructured) error {
+	if res.GetKind() != "Deployment" || res.GetName() != usageLogsTenancyProxyDeploymentName {
+		return nil
+	}
+
+	image := os.Getenv("RELATED_IMAGE_ODH_PYTHON_312_IMAGE")
+	if image == "" {
+		image = DefaultUsageLogsTenancyProxyImage
+	}
+
+	containers, found, err := unstructured.NestedSlice(res.Object, "spec", "template", "spec", "containers")
+	if err != nil {
+		return fmt.Errorf("read containers in deployment: %w", err)
+	}
+	if !found {
+		return errors.New("containers not found in usage-logs-tenancy-proxy deployment")
+	}
+
+	for i, c := range containers {
+		cm, ok := c.(map[string]any)
+		if !ok || cm["name"] != usageLogsTenancyProxyContainerName {
+			continue
+		}
+		cm["image"] = image
+		containers[i] = cm
+		return unstructured.SetNestedSlice(res.Object, containers, "spec", "template", "spec", "containers")
+	}
+
+	return errors.New("proxy container not found in usage-logs-tenancy-proxy deployment")
+}
+
 // ensureUsageLogsEnvoyFilter deploys or removes the OTel usage logs EnvoyFilter based on
 // the Config's usageLogging feature gate. The EnvoyFilter emits structured per-request
 // usage logs (token counts, identity, model) to an OTel Collector via gRPC Access Log Service.
@@ -553,7 +799,7 @@ func (r *LifecycleReconciler) applyUsageLogsEnvoyFilter(ctx context.Context, log
 		return fmt.Errorf("decode EnvoyFilter manifest: %w", err)
 	}
 
-	collectorAddress := fmt.Sprintf("usage-logs-collector.%s.svc.cluster.local", r.MonitoringNamespace)
+	collectorAddress := fmt.Sprintf("usage-logs-collector.%s.svc", r.MonitoringNamespace)
 	if err := patchClusterAddress(ef, collectorAddress); err != nil {
 		return fmt.Errorf("patch collector address in EnvoyFilter: %w", err)
 	}
@@ -698,6 +944,45 @@ func (r *LifecycleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				}}}
 			}),
 			builder.WithPredicates(crdInOptionalAPIGroup()),
+		).
+		// Watch managed usage-log resources so deletions/modifications trigger reconciliation
+		Watches(
+			&corev1.ConfigMap{},
+			handler.EnqueueRequestsFromMapFunc(func(_ context.Context, _ client.Object) []reconcile.Request {
+				return []reconcile.Request{{NamespacedName: types.NamespacedName{
+					Namespace: r.DeploymentNS,
+					Name:      r.DeploymentName,
+				}}}
+			}),
+			builder.WithPredicates(predicate.NewPredicateFuncs(func(o client.Object) bool {
+				return o.GetNamespace() == r.MonitoringNamespace &&
+					o.GetLabels()["app.kubernetes.io/managed-by"] == "maas-controller"
+			})),
+		).
+		Watches(
+			&rbacv1.ClusterRoleBinding{},
+			handler.EnqueueRequestsFromMapFunc(func(_ context.Context, _ client.Object) []reconcile.Request {
+				return []reconcile.Request{{NamespacedName: types.NamespacedName{
+					Namespace: r.DeploymentNS,
+					Name:      r.DeploymentName,
+				}}}
+			}),
+			builder.WithPredicates(predicate.NewPredicateFuncs(func(o client.Object) bool {
+				return o.GetLabels()["app.kubernetes.io/managed-by"] == "maas-controller"
+			})),
+		).
+		Watches(
+			&netwv1.NetworkPolicy{},
+			handler.EnqueueRequestsFromMapFunc(func(_ context.Context, _ client.Object) []reconcile.Request {
+				return []reconcile.Request{{NamespacedName: types.NamespacedName{
+					Namespace: r.DeploymentNS,
+					Name:      r.DeploymentName,
+				}}}
+			}),
+			builder.WithPredicates(predicate.NewPredicateFuncs(func(o client.Object) bool {
+				return o.GetNamespace() == r.MonitoringNamespace &&
+					o.GetLabels()["app.kubernetes.io/managed-by"] == "maas-controller"
+			})),
 		).
 		Complete(r)
 }
