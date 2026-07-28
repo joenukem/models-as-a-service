@@ -59,8 +59,9 @@ func TestAggregateModelSubjectAllowlistsAndGatewaySpec(t *testing.T) {
 		t.Fatalf("aggregateModelSubjectAllowlists returned error: %v", err)
 	}
 
-	if len(allowlists) != 2 {
-		t.Fatalf("expected 2 model allowlist entries, got %d", len(allowlists))
+	// 4 entries: canonical "llm/model-a", "llm/model-b" + bare-name aliases "model-a", "model-b"
+	if len(allowlists) != 4 {
+		t.Fatalf("expected 4 model allowlist entries, got %d: %v", len(allowlists), keysOf(allowlists))
 	}
 
 	modelA := allowlists["llm/model-a"]
@@ -69,6 +70,15 @@ func TestAggregateModelSubjectAllowlistsAndGatewaySpec(t *testing.T) {
 	}
 	if got, want := strings.Join(modelA.Users, ","), "user-a,user-b"; got != want {
 		t.Fatalf("model-a users = %q, want %q", got, want)
+	}
+
+	// BBR bare-name alias must carry the same allowlist as the canonical key.
+	bareA := allowlists["model-a"]
+	if got, want := strings.Join(bareA.Groups, ","), "group-a,group-b"; got != want {
+		t.Fatalf("bare model-a groups = %q, want %q", got, want)
+	}
+	if got, want := strings.Join(bareA.Users, ","), "user-a,user-b"; got != want {
+		t.Fatalf("bare model-a users = %q, want %q", got, want)
 	}
 
 	modelB := allowlists["llm/model-b"]
@@ -160,6 +170,11 @@ func TestAggregateModelSubjectAllowlistsModelNameAliases(t *testing.T) {
 		t.Fatalf("aggregateModelSubjectAllowlists returned error: %v", err)
 	}
 
+	// 3 entries: canonical "llm/model-a", resolved alias "claude-opus-4-8", bare name "model-a"
+	if len(allowlists) != 3 {
+		t.Fatalf("expected 3 model allowlist entries, got %d: %v", len(allowlists), keysOf(allowlists))
+	}
+
 	alias, ok := allowlists["claude-opus-4-8"]
 	if !ok {
 		t.Fatalf("expected alias entry for claude-opus-4-8, got keys: %v", keysOf(allowlists))
@@ -169,6 +184,15 @@ func TestAggregateModelSubjectAllowlistsModelNameAliases(t *testing.T) {
 	}
 	if got, want := strings.Join(alias.Users, ","), "user-a"; got != want {
 		t.Fatalf("alias users = %q, want %q", got, want)
+	}
+
+	// BBR bare-name alias must also be present so short X-Gateway-Model-Name headers work.
+	bare, ok := allowlists["model-a"]
+	if !ok {
+		t.Fatalf("expected bare-name entry for model-a, got keys: %v", keysOf(allowlists))
+	}
+	if got, want := strings.Join(bare.Users, ","), "user-a"; got != want {
+		t.Fatalf("bare model-a users = %q, want %q", got, want)
 	}
 
 	// Canonical namespace/name entry must be unaffected by aliasing.

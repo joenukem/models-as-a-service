@@ -1290,6 +1290,17 @@ func TestSelector_ResolvedModelFromAlias(t *testing.T) {
 					t.Errorf("ResolvedModel = %q, want %q", result.ResolvedModel, tc.canonicalRef)
 				}
 			})
+
+			t.Run("bare CRD name resolves to MaaSModelRef identity for BBR short names", func(t *testing.T) {
+				//nolint:unqueryvet,nolintlint // False positive - not a SQL query
+				result, err := selector.Select([]string{"g1"}, "", "", tc.modelName)
+				if err != nil {
+					t.Fatalf("Select: %v", err)
+				}
+				if result.ResolvedModel != tc.canonicalRef {
+					t.Errorf("ResolvedModel = %q, want canonical %q", result.ResolvedModel, tc.canonicalRef)
+				}
+			})
 		})
 	}
 }

@@ -1482,17 +1482,19 @@ func (r *MaaSAuthPolicyReconciler) aggregateModelSubjectAllowlists(ctx context.C
 
 // resolveHeaderModelKeys returns alternate model_access keys that match the value
 // ipp-pre sets in the X-Gateway-Model-Name header for body-based routing.
-// Reads MaaSModelRef.status.resolvedModelAlias, which the modelref controller
-// populates from the backing CRD (publisher ID for LLMISvc, targetModel for ExternalModel).
+// Always includes the bare MaaSModelRef name so that BBR short-name headers
+// (e.g. "llama-3-1-8b-instruct") resolve against the model_access map.
+// Also includes MaaSModelRef.status.resolvedModelAlias when populated (publisher
+// ID for LLMISvc, targetModel for ExternalModel).
 func (r *MaaSAuthPolicyReconciler) resolveHeaderModelKeys(ctx context.Context, ref maasv1alpha1.ModelRef) []string {
 	modelRef := &maasv1alpha1.MaaSModelRef{}
 	if err := r.Get(ctx, client.ObjectKey{Name: ref.Name, Namespace: ref.Namespace}, modelRef); err != nil {
-		return nil
+		return []string{ref.Name}
 	}
-	if modelRef.Status.ResolvedModelAlias == "" {
-		return nil
+	if modelRef.Status.ResolvedModelAlias == "" || modelRef.Status.ResolvedModelAlias == ref.Name {
+		return []string{ref.Name}
 	}
-	return []string{modelRef.Status.ResolvedModelAlias}
+	return []string{modelRef.Status.ResolvedModelAlias, ref.Name}
 }
 
 func (r *MaaSAuthPolicyReconciler) modelAuthPolicyExists(ctx context.Context, modelNamespace, modelName string) (bool, error) {
