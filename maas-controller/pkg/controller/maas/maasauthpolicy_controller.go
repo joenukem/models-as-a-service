@@ -1506,6 +1506,8 @@ func (r *MaaSAuthPolicyReconciler) resolveHeaderModelKeys(ctx context.Context, r
 				break
 			}
 		}
+	} else {
+		bareNameSafe = false
 	}
 
 	if modelRef.Status.ResolvedModelAlias == "" || modelRef.Status.ResolvedModelAlias == ref.Name {
