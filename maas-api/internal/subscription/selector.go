@@ -98,11 +98,22 @@ func (s *Selector) resolveModelAlias(requestedModel string) string {
 	}
 	// Also resolve bare MaaSModelRef CRD names so BBR short-name headers
 	// (e.g. "llama-3-1-8b-instruct") map to canonical "namespace/name".
+	// When multiple MaaSModelRefs share the same name across namespaces,
+	// return the input unchanged (fail closed — ambiguous name).
 	if !strings.Contains(requestedModel, "/") {
+		var match *unstructured.Unstructured
+		ambiguous := false
 		for _, u := range items {
 			if u.GetName() == requestedModel {
-				return u.GetNamespace() + "/" + u.GetName()
+				if match != nil {
+					ambiguous = true
+					break
+				}
+				match = u
 			}
+		}
+		if match != nil && !ambiguous {
+			return match.GetNamespace() + "/" + match.GetName()
 		}
 	}
 	return requestedModel
