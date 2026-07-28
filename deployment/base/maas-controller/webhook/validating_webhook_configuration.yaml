@@ -19,6 +19,7 @@ webhooks:
           - v1alpha1
         operations:
           - CREATE
+          - UPDATE
         resources:
           - aitenants
     sideEffects: None
@@ -59,4 +60,24 @@ webhooks:
           - CREATE
         resources:
           - maasauthpolicies
+    sideEffects: None
+  - admissionReviewVersions:
+      - v1
+    clientConfig:
+      service:
+        name: maas-controller-webhook-service
+        namespace: system
+        path: /validate-maas-opendatahub-io-v1alpha1-maasmodelref
+    failurePolicy: Fail
+    name: vmaasmodelref.kb.io
+    rules:
+      - apiGroups:
+          - maas.opendatahub.io
+        apiVersions:
+          - v1alpha1
+        operations:
+          - CREATE
+          - UPDATE
+        resources:
+          - maasmodelrefs
     sideEffects: None

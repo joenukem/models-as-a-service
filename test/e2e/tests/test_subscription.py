@@ -38,7 +38,7 @@ Environment variables:
   (GATEWAY_HOST, MAAS_API_BASE_URL, MAAS_SUBSCRIPTION_NAMESPACE, etc.).
 
   File-specific variables (all optional, with defaults):
-  - E2E_PREMIUM_MODEL_PATH: Gateway path for premium model (default: /llm/premium-simulated-simulated-premium)
+  None — premium path/name constants live in test_helper.py.
 """
 
 import copy
@@ -57,6 +57,7 @@ from test_helper import (
     MODEL_NAMESPACE,
     MODEL_PATH,
     MODEL_REF,
+    PREMIUM_MODEL_PATH,
     PREMIUM_MODEL_REF,
     SIMULATOR_ACCESS_POLICY,
     SIMULATOR_SUBSCRIPTION,
@@ -98,18 +99,34 @@ from test_helper import (
 log = logging.getLogger(__name__)
 
 
-# Constants specific to test_subscription.py (not shared)
-PREMIUM_MODEL_PATH = os.environ.get("E2E_PREMIUM_MODEL_PATH", "/llm/premium-simulated-simulated-premium")
-
 # Generated resource names (for TestManagedAnnotation)
 AUTH_POLICY_NAME = f"maas-auth-{MODEL_REF}"
 TRLP_NAME = f"maas-trlp-{MODEL_REF}"
 MANAGED_ANNOTATION = "opendatahub.io/managed"
+GATEWAY_PROPAGATION_RETRIES = 6
+GATEWAY_PROPAGATION_DELAY = 5
 
 
 # Cache for API keys to avoid creating too many during test runs.
 # Keyed by process ID to ensure test isolation when running in parallel workers.
 _default_api_key_cache: dict = {}
+
+
+def _request_with_gateway_retry(method, url, retries=GATEWAY_PROPAGATION_RETRIES, **kwargs):
+    """Retry transient gateway/Authorino propagation responses."""
+    for attempt in range(1, retries + 1):
+        r = method(url, timeout=TIMEOUT, verify=TLS_VERIFY, **kwargs)
+        is_empty_403 = r.status_code == 403 and not r.text.strip()
+        is_auth_propagation_500 = r.status_code == 500 and "AUTH_FAILURE" in r.text
+        if (is_empty_403 or is_auth_propagation_500) and attempt < retries:
+            log.info(
+                f"Gateway not ready (HTTP {r.status_code}, attempt {attempt}/{retries}), "
+                f"retrying in {GATEWAY_PROPAGATION_DELAY}s..."
+            )
+            time.sleep(GATEWAY_PROPAGATION_DELAY)
+            continue
+        return r
+    return r
 
 
 def _get_default_api_key() -> str:
@@ -627,7 +644,7 @@ class TestSubscriptionEnforcement:
             log.info("Verifying /v1/models endpoint is still accessible...")
             url = f"{_gateway_url()}{model_path}/v1/models"
             headers = {"Authorization": f"Bearer {api_key}"}
-            r_models = requests.get(url, headers=headers, timeout=TIMEOUT, verify=TLS_VERIFY)
+            r_models = _request_with_gateway_retry(requests.get, url, headers=headers)
 
             assert r_models.status_code == 200, \
                 f"Expected 200 for /v1/models endpoint even when quota exhausted, got {r_models.status_code}. " \
@@ -2409,7 +2426,7 @@ class TestDegradedSubscriptionFiltering:
             }
 
             log.info(f"GET {url} with API key")
-            r = requests.get(url, headers=headers, timeout=TIMEOUT, verify=TLS_VERIFY)
+            r = _request_with_gateway_retry(requests.get, url, headers=headers)
 
             log.info(f"Response: {r.status_code}")
 
@@ -2473,7 +2490,7 @@ class TestDegradedSubscriptionFiltering:
             }
 
             log.info(f"GET {url} with Kube token")
-            r = requests.get(url, headers=headers, timeout=TIMEOUT, verify=TLS_VERIFY)
+            r = _request_with_gateway_retry(requests.get, url, headers=headers)
 
             assert r.status_code == 200, \
                 f"Expected 200 with Kube token, got {r.status_code}: {r.text[:500]}"

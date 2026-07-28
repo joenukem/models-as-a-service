@@ -19,7 +19,7 @@ package maas
 import (
 	"testing"
 
-	kservev1alpha1 "github.com/kserve/kserve/pkg/apis/serving/v1alpha1"
+	kservev1alpha2 "github.com/kserve/kserve/pkg/apis/serving/v1alpha2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"knative.dev/pkg/apis"
 	duckv1 "knative.dev/pkg/apis/duck/v1"
@@ -35,13 +35,15 @@ func mustParseURL(raw string) *apis.URL {
 	return u
 }
 
-func newReadyLLMISvc(name, ns string, addresses []duckv1.Addressable) *kservev1alpha1.LLMInferenceService {
-	return &kservev1alpha1.LLMInferenceService{
+func newReadyLLMISvc(name, ns string, addresses []duckv1.Addressable) *kservev1alpha2.LLMInferenceService {
+	sourced := make([]kservev1alpha2.SourcedAddress, len(addresses))
+	for i, a := range addresses {
+		sourced[i] = kservev1alpha2.SourcedAddress{Addressable: a}
+	}
+	return &kservev1alpha2.LLMInferenceService{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Status: kservev1alpha1.LLMInferenceServiceStatus{
-			AddressStatus: duckv1.AddressStatus{
-				Addresses: addresses,
-			},
+		Status: kservev1alpha2.LLMInferenceServiceStatus{
+			Addresses: sourced,
 		},
 	}
 }
@@ -179,5 +181,89 @@ func TestGetEndpointFromLLMISvc_EmptyHostnameSkipped(t *testing.T) {
 	want := "https://maas.example.com/test-model"
 	if got != want {
 		t.Errorf("getEndpointFromLLMISvc() = %q, want %q (should skip address with empty hostname)", got, want)
+	}
+}
+
+func TestGetEndpointFromLLMISvc_PrefersModelRoutingOverPathBased(t *testing.T) {
+	llmisvc := newReadyLLMISvc("test-model", "default", []duckv1.Addressable{
+		{Name: strPtr("gateway-external"), URL: mustParseURL("https://maas.example.com/test-model")},
+		{Name: strPtr("gateway-external-model-routing"), URL: mustParseURL("https://maas.example.com/v1/chat/completions")},
+	})
+	h := &llmisvcHandler{}
+
+	got := h.getEndpointFromLLMISvc(llmisvc, []string{"maas.example.com"})
+	want := "https://maas.example.com/v1/chat/completions"
+	if got != want {
+		t.Errorf("getEndpointFromLLMISvc() = %q, want %q (model-routing should be preferred over path-based)", got, want)
+	}
+}
+
+func TestGetEndpointFromLLMISvc_ModelRouting_HostnameFiltering(t *testing.T) {
+	llmisvc := newReadyLLMISvc("test-model", "default", []duckv1.Addressable{
+		{Name: strPtr("gateway-external-model-routing"), URL: mustParseURL("https://wrong-gw.example.com/v1/chat/completions")},
+		{Name: strPtr("gateway-external-model-routing"), URL: mustParseURL("https://correct-gw.example.com/v1/chat/completions")},
+		{Name: strPtr("gateway-external"), URL: mustParseURL("https://wrong-gw.example.com/test-model")},
+		{Name: strPtr("gateway-external"), URL: mustParseURL("https://correct-gw.example.com/test-model")},
+	})
+	h := &llmisvcHandler{}
+
+	got := h.getEndpointFromLLMISvc(llmisvc, []string{"correct-gw.example.com"})
+	want := "https://correct-gw.example.com/v1/chat/completions"
+	if got != want {
+		t.Errorf("getEndpointFromLLMISvc() = %q, want %q (should select model-routing filtered by hostname)", got, want)
+	}
+}
+
+func TestGetEndpointFromLLMISvc_FallsBackToPathBased_WhenNoModelRouting(t *testing.T) {
+	llmisvc := newReadyLLMISvc("test-model", "default", []duckv1.Addressable{
+		{Name: strPtr("gateway-external"), URL: mustParseURL("https://maas.example.com/test-model")},
+	})
+	h := &llmisvcHandler{}
+
+	got := h.getEndpointFromLLMISvc(llmisvc, []string{"maas.example.com"})
+	want := "https://maas.example.com/test-model"
+	if got != want {
+		t.Errorf("getEndpointFromLLMISvc() = %q, want %q (should fall back to path-based when no model-routing address)", got, want)
+	}
+}
+
+func TestGetEndpointFromLLMISvc_ModelRouting_PrefersHTTPS(t *testing.T) {
+	llmisvc := newReadyLLMISvc("test-model", "default", []duckv1.Addressable{
+		{Name: strPtr("gateway-external-model-routing"), URL: mustParseURL("http://maas.example.com/v1/chat/completions")},
+		{Name: strPtr("gateway-external-model-routing"), URL: mustParseURL("https://maas.example.com/v1/chat/completions")},
+	})
+	h := &llmisvcHandler{}
+
+	got := h.getEndpointFromLLMISvc(llmisvc, []string{"maas.example.com"})
+	want := "https://maas.example.com/v1/chat/completions"
+	if got != want {
+		t.Errorf("getEndpointFromLLMISvc() = %q, want %q (should prefer HTTPS model-routing)", got, want)
+	}
+}
+
+func TestGetEndpointFromLLMISvc_ModelRouting_NoHostnames_Legacy(t *testing.T) {
+	llmisvc := newReadyLLMISvc("test-model", "default", []duckv1.Addressable{
+		{Name: strPtr("gateway-external"), URL: mustParseURL("https://maas.example.com/test-model")},
+		{Name: strPtr("gateway-external-model-routing"), URL: mustParseURL("https://maas.example.com/v1/chat/completions")},
+	})
+	h := &llmisvcHandler{}
+
+	got := h.getEndpointFromLLMISvc(llmisvc, nil)
+	want := "https://maas.example.com/v1/chat/completions"
+	if got != want {
+		t.Errorf("getEndpointFromLLMISvc() = %q, want %q (model-routing preferred in legacy mode too)", got, want)
+	}
+}
+
+func TestGetEndpointFromLLMISvc_ModelRouting_NoMatch_ReturnsEmpty(t *testing.T) {
+	llmisvc := newReadyLLMISvc("test-model", "default", []duckv1.Addressable{
+		{Name: strPtr("gateway-external-model-routing"), URL: mustParseURL("https://other-gw.example.com/v1/chat/completions")},
+		{Name: strPtr("gateway-external"), URL: mustParseURL("https://other-gw.example.com/test-model")},
+	})
+	h := &llmisvcHandler{}
+
+	got := h.getEndpointFromLLMISvc(llmisvc, []string{"maas.example.com"})
+	if got != "" {
+		t.Errorf("getEndpointFromLLMISvc() = %q, want empty (no matching hostname for any address type)", got)
 	}
 }

@@ -37,7 +37,7 @@ Automated deployment script for OpenShift clusters supporting both operator-base
 - `--operator-type <odh|rhoai>` - Which operator to install (default: odh)
 - `--deployment-mode <operator|kustomize>` - Deployment method (default: operator)
 - `--namespace <namespace>` - Target namespace for deployment
-- `--external-oidc` - Enable external OIDC on the `maas-api` AuthPolicy (kustomize mode only; in operator mode, configure `spec.externalOIDC` on the `Tenant` CR)
+- `--external-oidc` - Enable external OIDC on the `maas-api` AuthPolicy (kustomize mode only; in operator mode, configure `spec.oidc` on the default `AITenant`)
 - `--enable-keycloak` - Deploy a Keycloak instance for external OIDC testing
 - `--enable-tls-backend` - Enable TLS backend (default)
 - `--disable-tls-backend` - Disable TLS backend
@@ -45,6 +45,7 @@ Automated deployment script for OpenShift clusters supporting both operator-base
 - `--dry-run` - Show what would be done without applying changes
 - `--operator-catalog <image>` - Custom operator catalog image for PR testing
 - `--operator-image <image>` - Custom operator image for PR testing
+- `--ai-gateway-operator-image <image>` - Custom ai-gateway-operator image (operator mode only); patches `RELATED_IMAGE_ODH_AI_GATEWAY_OPERATOR_IMAGE` on the ODH CSV and enables `spec.components.aigateway.managementState=Managed` on the DSC
 - `--channel <channel>` - Operator channel override (default: fast-3 for ODH, stable-3.x for RHOAI)
 
 **Requirements:**
@@ -57,6 +58,7 @@ Automated deployment script for OpenShift clusters supporting both operator-base
 **Environment Variables:**
 - `MAAS_API_IMAGE` - Custom MaaS API container image (passed to the Tenant reconciler via `RELATED_IMAGE_ODH_MAAS_API_IMAGE` on the controller Deployment)
 - `MAAS_CONTROLLER_IMAGE` - Custom MaaS controller container image
+- `AI_GATEWAY_OPERATOR_IMAGE` - Custom ai-gateway-operator image (operator mode only)
 - `OPERATOR_CATALOG` - Custom operator catalog for PR testing
 - `OPERATOR_IMAGE` - Custom operator image for PR testing
 - `OPERATOR_TYPE` - Operator type (odh/rhoai)
@@ -74,6 +76,50 @@ LOG_LEVEL=DEBUG ./scripts/deploy.sh --verbose
 # Dry-run to preview deployment plan
 ./scripts/deploy.sh --dry-run
 ```
+
+---
+
+### Testing a PR against ODH latest + ai-gateway-operator stable
+
+Integration gate for `main` → `stable` promotion PRs: deploy the ODH operator's **main-branch
+"latest" catalog**, pin **ai-gateway-operator to its stable image**, pin `maas-controller`/`maas-api`
+to the PR-built images, and run the full e2e suite against that combination. This proves a PR's
+MaaS images still work with the latest ODH build and the stable AI Gateway component before merge.
+
+Unlike the default CI path (`--deployment-mode kustomize`), this uses `DEPLOY_MODE=operator`, the
+only path where the ODH operator's own `ModelsAsService`/`AIGateway` component reconcilers run —
+the default CI path never deploys `ai-gateway-operator` at all. `test/e2e/scripts/prow_run_smoke_test.sh`
+already understands all the env vars needed for this, so no separate wrapper script is required:
+
+```bash
+DEPLOY_MODE=operator \
+AI_GATEWAY_OPERATOR_IMAGE=quay.io/opendatahub/odh-ai-gateway-operator:odh-stable \
+OPERATOR_CATALOG=quay.io/opendatahub/opendatahub-operator-catalog:latest \
+MAAS_CONTROLLER_IMAGE=quay.io/opendatahub/maas-controller:pr-406 \
+MAAS_API_IMAGE=quay.io/opendatahub/maas-api:pr-232 \
+./test/e2e/scripts/prow_run_smoke_test.sh
+```
+
+To deploy only (skip the e2e suite) while iterating, call `deploy.sh` directly instead:
+
+```bash
+./scripts/deploy.sh --deployment-mode operator --operator-type odh \
+  --operator-catalog quay.io/opendatahub/opendatahub-operator-catalog:latest \
+  --ai-gateway-operator-image quay.io/opendatahub/odh-ai-gateway-operator:odh-stable \
+  --maas-controller-image quay.io/opendatahub/maas-controller:pr-406 \
+  --maas-api-image quay.io/opendatahub/maas-api:pr-232
+```
+
+Requires an OpenShift cluster with `oc` logged in as cluster-admin.
+
+**Note:** In `operator` mode, `deploy.sh` no longer falls back to installing `maas-controller`
+directly via kustomize if the ODH operator fails to create it. That fallback previously masked
+real integration gaps (e.g. an RBAC permission the operator couldn't grant, catalog/channel
+mismatches). If the operator doesn't reconcile `maas-controller` within `ROLLOUT_TIMEOUT`
+(default 120s), or the DSC reports `AIGatewayReady: False`, `deploy.sh` fails with the underlying
+DataScienceCluster condition message instead of silently self-installing. Set
+`FORCE_OVERWRITE=true` to bypass this check for local debugging only — it defeats the purpose of
+operator-mode validation, so don't set it in the promotion-PR pipeline.
 
 ---
 
@@ -155,8 +201,9 @@ Results:
 
 External OIDC can be enabled in two ways:
 
-**Operator mode:** Edit the `Tenant` CR to add `spec.externalOIDC` with
-`issuerUrl` and `clientId`. The Tenant reconciler patches the AuthPolicy automatically.
+**Operator mode:** Edit `AITenant/models-as-a-service` in the configured AITenant namespace
+(default `ai-tenants`) to add `spec.oidc` with `issuerUrl` and `clientId`. The controller
+uses that AITenant platform context when reconciling the AuthPolicy.
 
 **Kustomize mode:** Use `--external-oidc` with env vars:
 ```bash
@@ -251,7 +298,6 @@ Installs individual dependencies (Kuadrant, ODH, etc.).
 - `--istio`: Install Istio service mesh
 - `--odh`: Install OpenDataHub operator (OpenShift only)
 - `--kserve`: Install KServe model serving platform
-- `--prometheus`: Install Prometheus operator
 - `--ocp`: Use OpenShift-specific handling
 
 ---
@@ -400,6 +446,17 @@ MAAS_API_IMAGE=quay.io/opendatahub/maas-api:pr-456 \
 
 See [test/e2e/README.md](../test/e2e/README.md) for complete testing documentation and CI/CD pipeline usage examples.
 
+To also exercise `ai-gateway-operator` (not part of the default CI path — see
+[Testing a PR against ODH latest + ai-gateway-operator stable](#testing-a-pr-against-odh-latest--ai-gateway-operator-stable)
+above), set `DEPLOY_MODE=operator`:
+
+```bash
+DEPLOY_MODE=operator \
+AI_GATEWAY_OPERATOR_IMAGE=quay.io/opendatahub/odh-ai-gateway-operator:odh-stable \
+MAAS_CONTROLLER_IMAGE=quay.io/opendatahub/maas-controller:pr-406 \
+./test/e2e/scripts/prow_run_smoke_test.sh
+```
+
 ---
 
 ## Support
@@ -409,4 +466,3 @@ For issues or questions:
 2. Check the main project [README](../README.md)
 3. Review [deployment documentation](../docs/content/quickstart.md)
 4. Check sample model configurations in [docs/samples/models/](../docs/samples/models/)
-

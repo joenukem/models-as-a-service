@@ -13,9 +13,17 @@ Red Hat OpenShift AI (RHOAI). MaaS is installed by enabling it in the DataScienc
 | v0.0.2       | 4.19.9+ | v1.3+ / v1.2+             | v1.2+       |
 | v0.1.0+      | 4.19.9+ | v1.4.2+ / v1.3            | v1.2+       |
 
+!!! warning "RHCL v1.4.0 — silent auth bypass"
+    RHCL v1.4.0 contains a Wasm shim bug that silently bypasses gateway authentication.
+    Management endpoints return `AUTH_FAILURE`; inference endpoints work but are
+    unauthenticated. Upgrade to **RHCL v1.4.1+**. See
+    [Troubleshooting #16](troubleshooting.md#16-management-endpoints-return-auth_failure-on-rhcl-v140)
+    for diagnosis.
+
 !!! note "Other Kubernetes flavors"
     Other Kubernetes flavors (e.g., upstream Kubernetes, other distributions) are currently being validated.
 
+For the mapping between RHOAI product versions and MaaS releases, see [RHOAI to MaaS Release Mapping](../release-notes/index.md#rhoai-to-maas-release-mapping).
 
 
 ## Required Tools

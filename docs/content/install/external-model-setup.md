@@ -5,6 +5,15 @@
 
 This guide walks through deploying an external AI/ML model (e.g., OpenAI, Anthropic) through the MaaS gateway. External models are hosted outside the cluster — MaaS handles authentication, rate limiting, and API key management while routing inference requests to the external provider.
 
+## Multi-Tenant Limitation
+
+!!! danger "External models are not supported in multi-tenant deployments"
+    When multiple AITenants are deployed, each tenant gets a dedicated Gateway and Inference Payload Processor (IPP) stack. The ExternalModel reconciler is not tenant-aware — it always creates HTTPRoutes pointing to the default tenant's gateway (`--gateway-name` / `--gateway-namespace` controller flags). Each tenant's IPP EnvoyFilter targets its own gateway, which conflicts with the ExternalModel HTTPRoute's static gateway reference.
+
+    **Result:** External models do not work for any tenant — including the default tenant — when multiple IPP instances are running.
+
+    External models are only supported in single-tenant deployments. This limitation is tracked for a future fix.
+
 ## Prerequisites
 
 - MaaS platform deployed per the [Installation Guide](maas-setup.md)
@@ -37,7 +46,7 @@ IPP is required for external models — it injects the provider API key and tran
 MaaS deploys the payload-processing component from the [`ai-gateway-payload-processing`](https://github.com/opendatahub-io/ai-gateway-payload-processing) repository. For detailed configuration and usage, see that project's documentation.
 
 !!! note
-    If MaaS was deployed via the Tenant CR (standard RHOAI path), IPP is already deployed as a subcomponent. Verify with:
+    If MaaS was deployed via the MaasTenantConfig CR (standard RHOAI path), IPP is already deployed as a subcomponent. Verify with:
 
     ```bash
     kubectl get pods -n openshift-ingress -l app=payload-processing
@@ -86,7 +95,7 @@ Store the external provider's API key in a Kubernetes Secret. The Secret must:
 
 - Be in the same namespace as the ExternalModel
 - Use the data key `api-key`
-- Have the label `inference.networking.k8s.io/bbr-managed=true` so IPP can read it
+- Have the label `inference.llm-d.ai/ipp-managed=true` so IPP can read it
 
 ```bash
 TMP_KEY_FILE="$(mktemp)"
@@ -98,7 +107,7 @@ kubectl create secret generic openai-api-key -n llm \
 
 rm -f "${TMP_KEY_FILE}"
 
-kubectl label secret openai-api-key -n llm inference.networking.k8s.io/bbr-managed=true
+kubectl label secret openai-api-key -n llm inference.llm-d.ai/ipp-managed=true
 ```
 
 ## Step 4: Create the ExternalModel and MaaSModelRef
@@ -141,8 +150,45 @@ Expected output:
 
 ```text
 NAME     PHASE   ENDPOINT                                    HTTPROUTE   GATEWAY
-gpt-4o   Ready   https://maas.<cluster-domain>/llm/gpt-4o   gpt-4o      maas-default-gateway
+gpt-4o   Ready   https://maas.<cluster-domain>/llm/gpt-4o   maas-gpt-4o maas-default-gateway
 ```
+
+## Annotations
+
+ExternalModel supports optional annotations to control networking behavior:
+
+| Annotation | Required | Default | Description |
+|------------|----------|---------|-------------|
+| `maas.opendatahub.io/tls` | No | `true` | Controls TLS origination to the external endpoint. Set to `false` for non-TLS endpoints. |
+| `maas.opendatahub.io/port` | No | `443` | Overrides the default port for the external endpoint. Valid range: 1–65535; values outside this range are rejected during reconciliation. |
+
+By default, the ExternalModel reconciler enables TLS origination — the Istio sidecar performs the TLS handshake with the external provider. This is the correct setting for public providers like OpenAI and Anthropic.
+
+For internal endpoints that do not use TLS (e.g., a self-hosted vLLM instance), disable TLS origination and set the appropriate port:
+
+!!! warning "Cleartext credential traffic"
+    Disabling TLS while `credentialRef` is set means the provider API key is sent in cleartext between the gateway and the endpoint. Only use non-TLS mode on a trusted, isolated network.
+
+```yaml
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: ExternalModel
+metadata:
+  name: internal-vllm
+  namespace: llm
+  annotations:
+    maas.opendatahub.io/tls: "false"
+    maas.opendatahub.io/port: "8000"
+spec:
+  provider: openai
+  endpoint: vllm.internal.example.com
+  targetModel: my-model
+  credentialRef:
+    name: vllm-api-key
+```
+
+When TLS is disabled, the reconciler creates the ServiceEntry with HTTP protocol instead of HTTPS and does not create a DestinationRule. Any existing controller-managed DestinationRule is deleted; DestinationRules annotated with `opendatahub.io/managed: "false"` are preserved.
+
+For full annotation details, see the [ExternalModel CRD Reference](../reference/crds/external-model.md#annotations).
 
 ## Step 5: Configure Access and Rate Limits
 

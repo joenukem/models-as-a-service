@@ -15,6 +15,8 @@ import pytest
 import requests
 
 from test_helper import (
+    DEPLOYMENT_NAMESPACE,
+    MAAS_API_DEPLOYMENT_NAMESPACE,
     MODEL_NAMESPACE,
     MODEL_REF,
     TIMEOUT,
@@ -27,12 +29,18 @@ from test_helper import (
 
 AITENANT_CRD = "aitenants.maas.opendatahub.io"
 AITENANT_KIND = "aitenant"
+TENANT_CONFIG_KIND = "maastenantconfig"
 TENANT_CR_NAME = "default-tenant"
 
 LABEL_AI_GATEWAY_TENANT = "ai-gateway.opendatahub.io/tenant"
 LABEL_MANAGED_BY_AITENANT = "maas.opendatahub.io/managed-by-aitenant"
 LABEL_TENANT_NAME = "maas.opendatahub.io/tenant-name"
 LABEL_TENANT_NAMESPACE = "maas.opendatahub.io/tenant-namespace"
+LABEL_TENANT_INSTANCE = "maas.opendatahub.io/tenant-instance"
+ANNOTATION_AITENANT_NAME = "maas.opendatahub.io/aitenant-name"
+ANNOTATION_AITENANT_NAMESPACE = "maas.opendatahub.io/aitenant-namespace"
+
+DEFAULT_AITENANT_NAME = "models-as-a-service"
 
 FINALIZER_SUBSCRIPTION = "maas.opendatahub.io/subscription-cleanup"
 FINALIZER_AUTHPOLICY = "maas.opendatahub.io/authpolicy-cleanup"
@@ -43,7 +51,7 @@ AITENANT_NAMESPACE = os.environ.get("AITENANT_NAMESPACE", "ai-tenants")
 GATEWAY_NAMESPACE = os.environ.get("GATEWAY_NAMESPACE", "openshift-ingress")
 DEFAULT_GATEWAY_NAME = os.environ.get("GATEWAY_NAME", "maas-default-gateway")
 AITENANT_GATEWAY_CLASS_NAME = os.environ.get("AITENANT_GATEWAY_CLASS_NAME", "openshift-default")
-DEPLOYMENT_NAMESPACE = os.environ.get("DEPLOYMENT_NAMESPACE", "opendatahub")
+INFRA_NAMESPACE = MAAS_API_DEPLOYMENT_NAMESPACE
 OC_TIMEOUT = int(os.environ.get("E2E_OC_TIMEOUT", "60"))
 
 DISCOVERY_ARG = "--enable-tenant-namespace-discovery=true"
@@ -154,7 +162,10 @@ def _delete(kind: str, name: str, namespace: Optional[str] = None, *, timeout: s
     args = ["delete", kind, name, "--ignore-not-found", f"--timeout={timeout}"]
     if namespace:
         args.extend(["-n", namespace])
-    result = _oc_run(args, timeout=OC_TIMEOUT + 30)
+    process_timeout = OC_TIMEOUT + 30
+    if timeout.endswith("s") and timeout[:-1].isdigit():
+        process_timeout = max(process_timeout, int(timeout[:-1]) + 30)
+    result = _oc_run(args, timeout=process_timeout)
     if result.returncode != 0:
         raise RuntimeError(f"`oc {' '.join(args)}` failed: {result.stderr.strip() or result.stdout.strip()}")
 
@@ -268,7 +279,49 @@ def wait_for_status_phase(
     return wait_for_json(kind, name, namespace, predicate=_predicate, timeout=timeout, interval=interval)
 
 
-def wait_for_deployment_available(name: str, namespace: str = DEPLOYMENT_NAMESPACE, *, timeout: int = 180) -> dict:
+def wait_for_status_condition(
+    kind: str,
+    name: str,
+    namespace: str,
+    *,
+    condition_type: str,
+    expected_status: str = "True",
+    timeout: int = 120,
+    interval: int = 5,
+) -> dict:
+    def _predicate(obj: dict) -> bool:
+        for condition in (obj.get("status") or {}).get("conditions") or []:
+            if condition.get("type") == condition_type and condition.get("status") == expected_status:
+                return True
+        return False
+
+    return wait_for_json(kind, name, namespace, predicate=_predicate, timeout=timeout, interval=interval)
+
+
+def wait_for_gateway_authpolicy_ready(
+    gateway_name: str,
+    namespace: str = GATEWAY_NAMESPACE,
+    *,
+    timeout: int = 120,
+) -> dict:
+    """Wait for the gateway AuthPolicy to be both Accepted and Enforced."""
+    auth_name = per_tenant_gateway_policy_names(gateway_name, gateway_name)["gateway_authpolicy"]
+
+    def _predicate(obj: dict) -> bool:
+        conditions = (obj.get("status") or {}).get("conditions") or []
+        accepted = False
+        enforced = False
+        for c in conditions:
+            if c.get("type") == "Accepted" and c.get("status") == "True":
+                accepted = True
+            if c.get("type") == "Enforced" and c.get("status") == "True":
+                enforced = True
+        return accepted and enforced
+
+    return wait_for_json("authpolicy", auth_name, namespace, predicate=_predicate, timeout=timeout)
+
+
+def wait_for_deployment_available(name: str, namespace: str = INFRA_NAMESPACE, *, timeout: int = 180) -> dict:
     def _predicate(obj: dict) -> bool:
         status = obj.get("status") or {}
         if status.get("availableReplicas", 0) < 1:
@@ -402,16 +455,19 @@ def new_named_tenant_case(prefix: str) -> dict[str, str]:
     }
 
 
-def admin_subject() -> str:
-    whoami = _oc_run(["whoami"])
-    if whoami.returncode == 0 and whoami.stdout.strip():
-        return whoami.stdout.strip()
-    raise RuntimeError(
-        "oc whoami failed: "
-        f"returncode={whoami.returncode} "
-        f"stdout={whoami.stdout.strip()!r} "
-        f"stderr={whoami.stderr.strip()!r}"
-    )
+def gateway_access_label_key(gateway_name: str) -> str:
+    return f"maas.opendatahub.io/gateway-access-{gateway_name}"
+
+
+def apply_gateway_access_label(namespace: str, gateway_name: str) -> None:
+    ensure_namespace(namespace, labels={gateway_access_label_key(gateway_name): "true"})
+
+
+def remove_gateway_access_label(namespace: str, gateway_name: str) -> None:
+    patch = {"metadata": {"labels": {gateway_access_label_key(gateway_name): None}}}
+    result = _oc_run(["patch", "namespace", namespace, "--type=merge", "-p", json.dumps(patch)])
+    if result.returncode != 0 and not _oc_output_not_found(result):
+        raise RuntimeError(f"failed to remove gateway access label from {namespace}: {result.stderr.strip()}")
 
 
 def ensure_namespace(name: str, *, labels: Optional[dict[str, str]] = None) -> None:
@@ -464,36 +520,47 @@ def apply_tenant_cr(
     *,
     gateway_namespace: str = GATEWAY_NAMESPACE,
     external_oidc: Optional[dict[str, str]] = None,
-    tenant_label_name: Optional[str] = None,
 ) -> None:
-    spec: dict[str, Any] = {
-        "gatewayRef": {
-            "name": gateway_name,
-            "namespace": gateway_namespace,
-        }
-    }
-    if external_oidc is None and gateway_name == DEFAULT_GATEWAY_NAME:
-        external_oidc = external_oidc_from_env()
-    if external_oidc:
-        spec["externalOIDC"] = external_oidc
-    metadata: dict[str, Any] = {"name": TENANT_CR_NAME, "namespace": namespace}
-    if tenant_label_name:
-        metadata["labels"] = {
-            LABEL_MANAGED_BY_AITENANT: "true",
-            LABEL_TENANT_NAME: tenant_label_name,
-            LABEL_TENANT_NAMESPACE: namespace,
-        }
+    # gateway_name/gateway_namespace/external_oidc are kept for older callers.
+    # Gateway and OIDC platform context now belongs to AITenant; MaasTenantConfig
+    # only enables the namespace for MaaS runtime CRs and carries API key/telemetry config.
+    _ = (gateway_name, gateway_namespace, external_oidc)
     _apply(
         {
             "apiVersion": "maas.opendatahub.io/v1alpha1",
-            "kind": "Tenant",
-            "metadata": metadata,
-            "spec": spec,
+            "kind": "MaasTenantConfig",
+            "metadata": {"name": TENANT_CR_NAME, "namespace": namespace},
+            "spec": {},
         }
     )
 
 
 def apply_gateway_fixture(gateway_name: str, *, fixture_label: str) -> None:
+    gw_options_name = f"{gateway_name}-gw-options"
+    service_ca_secret = f"{gateway_name}-gw-service-tls"
+    gateway_access_label = gateway_access_label_key(gateway_name)
+    # Apply gateway access label to infra namespace where HTTPRoutes are created
+    apply_gateway_access_label(INFRA_NAMESPACE, gateway_name)
+    _apply(
+        {
+            "apiVersion": "v1",
+            "kind": "ConfigMap",
+            "metadata": {
+                "name": gw_options_name,
+                "namespace": GATEWAY_NAMESPACE,
+                "labels": {"e2e.maas.opendatahub.io/fixture": fixture_label},
+            },
+            "data": {
+                "service": (
+                    "metadata:\n"
+                    "  annotations:\n"
+                    f"    service.beta.openshift.io/serving-cert-secret-name: \"{service_ca_secret}\"\n"
+                    "spec:\n"
+                    "  type: ClusterIP\n"
+                )
+            },
+        }
+    )
     _apply(
         {
             "apiVersion": "gateway.networking.k8s.io/v1",
@@ -501,22 +568,166 @@ def apply_gateway_fixture(gateway_name: str, *, fixture_label: str) -> None:
             "metadata": {
                 "name": gateway_name,
                 "namespace": GATEWAY_NAMESPACE,
-                "labels": {"e2e.maas.opendatahub.io/fixture": fixture_label},
+                "labels": {
+                    "app.kubernetes.io/component": "gateway",
+                    "app.kubernetes.io/instance": gateway_name,
+                    "app.kubernetes.io/name": "maas",
+                    "e2e.maas.opendatahub.io/fixture": fixture_label,
+                    "opendatahub.io/managed": "false",
+                },
+                "annotations": {
+                    "opendatahub.io/managed": "false",
+                    "security.opendatahub.io/authorino-tls-bootstrap": "true",
+                },
             },
             "spec": {
                 "gatewayClassName": AITENANT_GATEWAY_CLASS_NAME,
-                "listeners": [{"name": "http", "port": 80, "protocol": "HTTP"}],
+                "infrastructure": {
+                    "parametersRef": {
+                        "group": "",
+                        "kind": "ConfigMap",
+                        "name": gw_options_name,
+                    }
+                },
+                "listeners": [
+                    {
+                        "name": "https",
+                        "port": 443,
+                        "protocol": "HTTPS",
+                        "allowedRoutes": {
+                            "namespaces": {
+                                "from": "Selector",
+                                "selector": {
+                                    "matchLabels": {
+                                        gateway_access_label: "true",
+                                    }
+                                },
+                            }
+                        },
+                        "tls": {
+                            "mode": "Terminate",
+                            "certificateRefs": [
+                                {"group": "", "kind": "Secret", "name": service_ca_secret}
+                            ],
+                        },
+                    }
+                ],
             },
         }
     )
 
 
+def cluster_domain_from_default_route() -> str:
+    for route_name in ("maas-gateway-route",):
+        route = get_json_or_none("route", route_name, GATEWAY_NAMESPACE)
+        host = ((route or {}).get("spec") or {}).get("host", "")
+        if host and "." in host:
+            return host.split(".", 1)[1]
+    gateway_host = os.environ.get("GATEWAY_HOST", "")
+    if gateway_host and "." in gateway_host:
+        return gateway_host.split(".", 1)[1]
+    routes = list_json("route", GATEWAY_NAMESPACE, labels="app.kubernetes.io/name=maas")
+    for route in routes:
+        host = ((route or {}).get("spec") or {}).get("host", "")
+        if host and "." in host:
+            return host.split(".", 1)[1]
+    raise RuntimeError(f"could not determine cluster apps domain from routes in {GATEWAY_NAMESPACE}")
+
+
+def wait_for_gateway_programmed(gateway_name: str, *, timeout: int = 180) -> None:
+    result = _oc_run(
+        [
+            "wait",
+            "--for=condition=Programmed",
+            f"gateway/{gateway_name}",
+            "-n",
+            GATEWAY_NAMESPACE,
+            f"--timeout={timeout}s",
+        ],
+        timeout=timeout + 30,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"gateway {GATEWAY_NAMESPACE}/{gateway_name} did not become Programmed: "
+            f"{result.stderr.strip() or result.stdout.strip()}"
+        )
+
+
+def wait_for_route_admitted(route_name: str, *, timeout: int = 60, interval: int = 3) -> dict:
+    def _predicate(obj: dict) -> bool:
+        for ingress in (obj.get("status") or {}).get("ingress") or []:
+            for condition in ingress.get("conditions") or []:
+                if condition.get("type") == "Admitted" and condition.get("status") == "True":
+                    return True
+        return False
+
+    return wait_for_json("route", route_name, GATEWAY_NAMESPACE, predicate=_predicate, timeout=timeout, interval=interval)
+
+
+def wait_for_httproute_accepted(
+    route_name: str,
+    namespace: str,
+    gateway_name: str,
+    gateway_namespace: str = GATEWAY_NAMESPACE,
+    *,
+    timeout: int = 180,
+    interval: int = 5,
+) -> dict:
+    def _predicate(obj: dict) -> bool:
+        for parent in (obj.get("status") or {}).get("parents") or []:
+            parent_ref = parent.get("parentRef") or {}
+            parent_namespace = parent_ref.get("namespace") or gateway_namespace
+            if parent_ref.get("name") != gateway_name or parent_namespace != gateway_namespace:
+                continue
+            return any(
+                condition.get("type") == "Accepted" and condition.get("status") == "True"
+                for condition in parent.get("conditions") or []
+            )
+        return False
+
+    return wait_for_json("httproute", route_name, namespace, predicate=_predicate, timeout=timeout, interval=interval)
+
+
+def apply_gateway_route_fixture(gateway_name: str, *, fixture_label: str) -> None:
+    service_name = f"{gateway_name}-{AITENANT_GATEWAY_CLASS_NAME}"
+    route_name = f"{gateway_name}-route"
+    hostname = f"{gateway_name}.{cluster_domain_from_default_route()}"
+    wait_for_json("service", service_name, GATEWAY_NAMESPACE, timeout=120)
+
+    route: dict[str, Any] = {
+        "apiVersion": "route.openshift.io/v1",
+        "kind": "Route",
+        "metadata": {
+            "name": route_name,
+            "namespace": GATEWAY_NAMESPACE,
+            "labels": {
+                "app.kubernetes.io/component": "gateway",
+                "app.kubernetes.io/instance": gateway_name,
+                "app.kubernetes.io/name": "maas",
+                "e2e.maas.opendatahub.io/fixture": fixture_label,
+                "gateway.networking.k8s.io/gateway-name": gateway_name,
+            },
+        },
+        "spec": {
+            "host": hostname,
+            "to": {"kind": "Service", "name": service_name, "weight": 100},
+            "port": {"targetPort": 443},
+            "tls": {"termination": "reencrypt", "insecureEdgeTerminationPolicy": "Redirect"},
+        },
+    }
+
+    signing_ca = get_json_or_none("configmap", "signing-cabundle", "openshift-service-ca")
+    ca_bundle = ((signing_ca or {}).get("data") or {}).get("ca-bundle.crt", "")
+    if ca_bundle:
+        route["spec"]["tls"]["destinationCACertificate"] = ca_bundle
+
+    _apply(route)
+    wait_for_route_admitted(route_name)
+
+
 def apply_aitenant(case: dict[str, str]) -> None:
     spec: dict[str, Any] = {
         "gateway": {"name": case["gateway_name"]},
-        "rbac": {
-            "admins": [{"kind": "User", "name": admin_subject()}],
-        },
     }
     oidc = external_oidc_from_env()
     if oidc:
@@ -542,12 +753,42 @@ def aitenant_ready(obj: dict) -> bool:
     )
 
 
+def bridge_tenant_owned_by_aitenant(case: dict[str, str]):
+    def _predicate(obj: dict) -> bool:
+        metadata = obj.get("metadata") or {}
+        labels = metadata.get("labels") or {}
+        annotations = metadata.get("annotations") or {}
+        return (
+            labels.get(LABEL_MANAGED_BY_AITENANT) == "true"
+            and labels.get(LABEL_TENANT_NAME) == case["tenant_label_name"]
+            and labels.get(LABEL_TENANT_NAMESPACE) == case["tenant_ns"]
+            and annotations.get(ANNOTATION_AITENANT_NAME) == case["tenant_label_name"]
+            and annotations.get(ANNOTATION_AITENANT_NAMESPACE) == AITENANT_NAMESPACE
+        )
+
+    return _predicate
+
+
 def bootstrap_aitenant_tenant(case: dict[str, str], *, use_default_gateway: bool = False) -> None:
     if not use_default_gateway:
         apply_gateway_fixture(case["gateway_name"], fixture_label=case["tenant_label_name"])
+        wait_for_gateway_programmed(case["gateway_name"])
+        apply_gateway_route_fixture(case["gateway_name"], fixture_label=case["tenant_label_name"])
     apply_aitenant(case)
     wait_for_json(AITENANT_KIND, case["tenant_label_name"], AITENANT_NAMESPACE, predicate=aitenant_ready)
-    wait_for_json("tenant", TENANT_CR_NAME, case["tenant_ns"])
+    wait_for_json(
+        "maastenantconfig",
+        TENANT_CR_NAME,
+        case["tenant_ns"],
+        predicate=bridge_tenant_owned_by_aitenant(case),
+    )
+    if not use_default_gateway:
+        apply_gateway_access_label(case["tenant_ns"], case["gateway_name"])
+        wait_for_httproute_accepted(
+            per_tenant_maas_api_names(case["tenant_label_name"])["httproute"],
+            INFRA_NAMESPACE,
+            case["gateway_name"],
+        )
 
 
 def apply_maas_auth_policy(name: str, namespace: str, model_ref: str = MODEL_REF, model_namespace: str = MODEL_NAMESPACE) -> None:
@@ -602,6 +843,140 @@ def apply_maas_subscription(
     )
 
 
+def apply_unrelated_tenant_objects(case: dict[str, str]) -> dict[str, str]:
+    """Create user-owned objects that must survive AITenant teardown."""
+    names = {
+        "secret": f"{case['tenant_label_name']}-user-secret",
+        "rolebinding": f"{case['tenant_label_name']}-user-binding",
+    }
+    _apply(
+        {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {"name": names["secret"], "namespace": case["tenant_ns"]},
+            "type": "Opaque",
+            "stringData": {"purpose": "unrelated-user-content"},
+        }
+    )
+    _apply(
+        {
+            "apiVersion": "rbac.authorization.k8s.io/v1",
+            "kind": "RoleBinding",
+            "metadata": {"name": names["rolebinding"], "namespace": case["tenant_ns"]},
+            "roleRef": {
+                "apiGroup": "rbac.authorization.k8s.io",
+                "kind": "Role",
+                "name": f"aitenant-{case['tenant_label_name']}-tenant-admin",
+            },
+            "subjects": [
+                {
+                    "apiGroup": "rbac.authorization.k8s.io",
+                    "kind": "User",
+                    "name": "e2e-preserved-user",
+                }
+            ],
+        }
+    )
+    return names
+
+
+def provision_tenant_model(
+    model_name: str,
+    tenant_namespace: str,
+    gateway_name: str,
+    *,
+    ready_timeout: int = 180,
+) -> None:
+    """Deploy a model in a tenant namespace per ADR MS-0003 (model deployer role).
+
+    Creates LLMInferenceService + MaaSModelRef and waits for backend readiness.
+    The model is not Ready or accessible for inference or /v1/models until
+    MaasAuthPolicy and MaaSSubscription are created in the tenant admin namespace.
+    """
+    from test_helper import _create_llmis, _create_maas_model_ref
+
+    _create_llmis(model_name, tenant_namespace, gateway_name, GATEWAY_NAMESPACE)
+    wait_for_httproute_accepted(
+        f"{model_name}-kserve-route",
+        tenant_namespace,
+        gateway_name,
+        timeout=ready_timeout,
+    )
+    _create_maas_model_ref(model_name, tenant_namespace, model_name)
+    wait_for_status_condition(
+        "maasmodelref",
+        model_name,
+        tenant_namespace,
+        condition_type="RuntimeReady",
+        timeout=ready_timeout,
+    )
+
+
+def make_tenant_model_accessible(
+    model_name: str,
+    tenant_namespace: str,
+    auth_policy_name: str,
+    subscription_name: str,
+    *,
+    token_limit: int = 100,
+    window: str = "1m",
+    priority: Optional[int] = None,
+    trlp_timeout: int = 120,
+    gateway_name: str | None = None,
+    gateway_namespace: str = GATEWAY_NAMESPACE,
+) -> None:
+    """Make a deployed tenant model accessible per ADR MS-0003 (tenant admin role).
+
+    Creates MaasAuthPolicy + MaasSubscription in the tenant namespace and waits
+    for controller reconciliation, including TokenRateLimitPolicy readiness on the
+    subscription status (required by maas-api subscription selection).
+    """
+    from test_helper import _wait_for_subscription_trlp_status
+
+    apply_maas_auth_policy(
+        auth_policy_name,
+        tenant_namespace,
+        model_ref=model_name,
+        model_namespace=tenant_namespace,
+    )
+    wait_for_status_phase(
+        "maasauthpolicy",
+        auth_policy_name,
+        tenant_namespace,
+        expected_phase="Active",
+    )
+    if gateway_name is not None:
+        wait_for_gateway_authpolicy_ready(gateway_name, namespace=gateway_namespace)
+    apply_maas_subscription(
+        subscription_name,
+        tenant_namespace,
+        model_ref=model_name,
+        model_namespace=tenant_namespace,
+        token_limit=token_limit,
+        window=window,
+        priority=priority,
+    )
+    wait_for_status_phase(
+        "maassubscription",
+        subscription_name,
+        tenant_namespace,
+        expected_phase=("Active", "Degraded"),
+    )
+    _wait_for_subscription_trlp_status(
+        subscription_name,
+        expected_ready=True,
+        namespace=tenant_namespace,
+        timeout=trlp_timeout,
+    )
+    wait_for_status_phase(
+        "maasmodelref",
+        model_name,
+        tenant_namespace,
+        expected_phase="Ready",
+        timeout=180,
+    )
+
+
 def delete_maas_auth_policy(name: str, namespace: str) -> None:
     _delete_cr("MaaSAuthPolicy", name, namespace)
 
@@ -626,7 +1001,7 @@ def parse_annotation_list(value: str) -> list[str]:
     return [item.strip() for item in (value or "").split(",") if item.strip()]
 
 
-def deployment_env(name: str, namespace: str = DEPLOYMENT_NAMESPACE, *, container_name: str = "maas-api") -> dict[str, str]:
+def deployment_env(name: str, namespace: str = INFRA_NAMESPACE, *, container_name: str = "maas-api") -> dict[str, str]:
     deployment = get_json_or_none("deployment", name, namespace)
     if not deployment:
         return {}
@@ -635,14 +1010,14 @@ def deployment_env(name: str, namespace: str = DEPLOYMENT_NAMESPACE, *, containe
     return {entry.get("name"): entry.get("value") for entry in container.get("env") or [] if entry.get("name")}
 
 
-def http_route_parent_refs(name: str, namespace: str = DEPLOYMENT_NAMESPACE) -> list[dict]:
+def http_route_parent_refs(name: str, namespace: str = INFRA_NAMESPACE) -> list[dict]:
     route = get_json_or_none("httproute", name, namespace)
     if not route:
         return []
     return ((route.get("spec") or {}).get("parentRefs") or [])
 
 
-def http_route_backend_refs(name: str, namespace: str = DEPLOYMENT_NAMESPACE) -> list[dict]:
+def http_route_backend_refs(name: str, namespace: str = INFRA_NAMESPACE) -> list[dict]:
     route = get_json_or_none("httproute", name, namespace)
     if not route:
         return []
@@ -652,13 +1027,158 @@ def http_route_backend_refs(name: str, namespace: str = DEPLOYMENT_NAMESPACE) ->
     return refs
 
 
+def per_tenant_resource_name(base_name: str, tenant_name: str) -> str:
+    if not tenant_name:
+        return base_name
+    return f"{base_name}-{tenant_name}"
+
+
+def ipp_tenant_id(tenant_name: str) -> str:
+    """Return the tenant ID used for IPP resource suffixes (empty for default tenant)."""
+    if not tenant_name or tenant_name == DEFAULT_AITENANT_NAME:
+        return ""
+    return tenant_name
+
+
+def per_tenant_ipp_names(tenant_name: str) -> dict[str, str]:
+    """Return per-tenant IPP resource names in the gateway namespace."""
+    tenant_id = ipp_tenant_id(tenant_name)
+    return {
+        "processing_deployment": per_tenant_resource_name("payload-processing", tenant_id),
+        "pre_processing_deployment": per_tenant_resource_name("payload-pre-processing", tenant_id),
+        "processing_service": per_tenant_resource_name("payload-processing", tenant_id),
+        "pre_processing_service": per_tenant_resource_name("payload-pre-processing", tenant_id),
+        "envoyfilter": per_tenant_resource_name("payload-processing", tenant_id),
+        "plugins_configmap": per_tenant_resource_name("payload-processing-plugins", tenant_id),
+        "serviceaccount": per_tenant_resource_name("payload-processing", tenant_id),
+        "networkpolicy": per_tenant_resource_name("payload-processing", tenant_id),
+        "clusterrolebinding": per_tenant_resource_name("payload-processing-reader", tenant_id),
+    }
+
+
+def wait_for_per_tenant_ipp_ready(case: dict[str, str], *, timeout: int = 240) -> dict[str, str]:
+    """Wait until tenant-scoped IPP Deployments and EnvoyFilter exist in the gateway namespace."""
+    names = per_tenant_ipp_names(case["tenant_label_name"])
+    wait_for_deployment_available(names["processing_deployment"], GATEWAY_NAMESPACE, timeout=timeout)
+    wait_for_deployment_available(names["pre_processing_deployment"], GATEWAY_NAMESPACE, timeout=timeout)
+    wait_for_json("envoyfilter", names["envoyfilter"], GATEWAY_NAMESPACE, timeout=timeout)
+    return names
+
+
+def get_ipp_deployment_env(deployment_name: str, namespace: str = GATEWAY_NAMESPACE) -> dict[str, str]:
+    return deployment_env(deployment_name, namespace)
+
+
+def envoyfilter_target_gateway(name: str, namespace: str = GATEWAY_NAMESPACE) -> str:
+    envoyfilter = get_json_or_none("envoyfilter", name, namespace)
+    if not envoyfilter:
+        return ""
+    spec = envoyfilter.get("spec") or {}
+    target_refs = spec.get("targetRefs") or []
+    if target_refs:
+        return target_refs[0].get("name") or ""
+    return (spec.get("targetRef") or {}).get("name") or ""
+
+
+def envoyfilter_grpc_cluster_names(envoyfilter: dict) -> list[str]:
+    names: list[str] = []
+
+    def walk(obj):
+        if isinstance(obj, dict):
+            cluster_name = obj.get("cluster_name")
+            if isinstance(cluster_name, str):
+                names.append(cluster_name)
+            for value in obj.values():
+                walk(value)
+        elif isinstance(obj, list):
+            for item in obj:
+                walk(item)
+
+    walk(envoyfilter)
+    return names
+
+
+def deployment_log_snapshot(
+    deployment_name: str,
+    *,
+    namespace: str = GATEWAY_NAMESPACE,
+    since: str = "30s",
+) -> str:
+    result = _oc_run(
+        ["logs", f"deployment/{deployment_name}", "-n", namespace, f"--since={since}"],
+        timeout=120,
+    )
+    if result.returncode != 0:
+        return ""
+    return result.stdout or ""
+
+
+def ipp_logs_show_recent_activity(log_text: str) -> bool:
+    markers = ("x-request-id", "handlers/server.go", "processing request headers")
+    return any(marker in log_text for marker in markers)
+
+
 def per_tenant_maas_api_names(tenant_name: str) -> dict[str, str]:
     return {
-        "deployment": f"maas-api-{tenant_name}",
-        "service": f"maas-api-{tenant_name}",
-        "httproute": f"maas-api-{tenant_name}-route",
-        "authpolicy": f"maas-api-{tenant_name}-auth",
+        "deployment": per_tenant_resource_name("maas-api", tenant_name),
+        "service": per_tenant_resource_name("maas-api", tenant_name),
+        "httproute": per_tenant_resource_name("maas-api-route", tenant_name),
+        "cronjob": per_tenant_resource_name("maas-api-key-cleanup", tenant_name),
+        "authpolicy": per_tenant_resource_name("maas-api-auth-policy", tenant_name),
     }
+
+
+def per_tenant_gateway_policy_names(tenant_name: str, gateway_name: str) -> dict[str, str]:
+    return {
+        "gateway_authpolicy": f"{gateway_name}-maas-auth",
+        "default_deny": per_tenant_resource_name("gateway-default-deny", tenant_name),
+        "destinationrule": per_tenant_resource_name("maas-api-backend-tls", tenant_name),
+    }
+
+
+def aitenant_cleanup_resource_refs(case: dict[str, str]) -> list[tuple[str, str, str]]:
+    maas_api_names = per_tenant_maas_api_names(case["tenant_label_name"])
+    gateway_policy_names = per_tenant_gateway_policy_names(case["tenant_label_name"], case["gateway_name"])
+    ipp_names = per_tenant_ipp_names(case["tenant_label_name"])
+    refs = [
+        ("deployment", maas_api_names["deployment"], INFRA_NAMESPACE),
+        ("service", maas_api_names["service"], INFRA_NAMESPACE),
+        ("httproute", maas_api_names["httproute"], INFRA_NAMESPACE),
+        ("cronjob", maas_api_names["cronjob"], INFRA_NAMESPACE),
+        ("authpolicy", gateway_policy_names["gateway_authpolicy"], GATEWAY_NAMESPACE),
+        ("tokenratelimitpolicy", gateway_policy_names["default_deny"], GATEWAY_NAMESPACE),
+        ("destinationrule", gateway_policy_names["destinationrule"], GATEWAY_NAMESPACE),
+    ]
+    if ipp_tenant_id(case["tenant_label_name"]):
+        refs.extend(
+            [
+                ("deployment", ipp_names["processing_deployment"], GATEWAY_NAMESPACE),
+                ("deployment", ipp_names["pre_processing_deployment"], GATEWAY_NAMESPACE),
+                ("service", ipp_names["processing_service"], GATEWAY_NAMESPACE),
+                ("service", ipp_names["pre_processing_service"], GATEWAY_NAMESPACE),
+                ("envoyfilter", ipp_names["envoyfilter"], GATEWAY_NAMESPACE),
+                ("serviceaccount", ipp_names["serviceaccount"], GATEWAY_NAMESPACE),
+                ("configmap", ipp_names["plugins_configmap"], GATEWAY_NAMESPACE),
+                ("clusterrolebinding", ipp_names["clusterrolebinding"], ""),
+                ("networkpolicy", ipp_names["networkpolicy"], GATEWAY_NAMESPACE),
+            ]
+        )
+    return refs
+
+
+def wait_for_aitenant_cleanup_resources(case: dict[str, str], *, timeout: int = 180) -> None:
+    for kind, name, namespace in aitenant_cleanup_resource_refs(case):
+        wait_for_json(kind, name, namespace, timeout=timeout)
+
+
+def wait_for_aitenant_cleanup_resources_deleted(case: dict[str, str], *, timeout: int = 180) -> None:
+    for kind, name, namespace in aitenant_cleanup_resource_refs(case):
+        wait_for_not_found(kind, name, namespace, timeout=timeout)
+
+    # The route-level maas-api AuthPolicy is no longer rendered, but the delete
+    # path still removes stale instances left by older deployments.
+    maas_api_names = per_tenant_maas_api_names(case["tenant_label_name"])
+    wait_for_not_found("authpolicy", maas_api_names["authpolicy"], INFRA_NAMESPACE, timeout=timeout)
 
 
 def get_gateway_authpolicy(namespace: str = GATEWAY_NAMESPACE, name: str = GATEWAY_AUTH_POLICY_NAME) -> Optional[dict]:
@@ -711,12 +1231,18 @@ def auth_can_create_maassubscription(subject: str, namespace: str) -> bool:
 
 
 def cleanup_discovery_case(case: dict[str, str], *, delete_gateway: bool = True) -> None:
-    delete_best_effort(AITENANT_KIND, case["tenant_label_name"], AITENANT_NAMESPACE)
+    delete_best_effort(AITENANT_KIND, case["tenant_label_name"], AITENANT_NAMESPACE, timeout="180s")
     delete_maas_auth_policy(case["policy_name"], case["tenant_ns"])
     delete_maas_subscription(case["subscription_name"], case["tenant_ns"])
     delete_namespace_best_effort(case["tenant_ns"])
     if delete_gateway and case["gateway_name"] != DEFAULT_GATEWAY_NAME:
+        delete_best_effort("route", f"{case['gateway_name']}-route", GATEWAY_NAMESPACE)
         delete_best_effort("gateway", case["gateway_name"], GATEWAY_NAMESPACE)
+        delete_best_effort("configmap", f"{case['gateway_name']}-gw-options", GATEWAY_NAMESPACE)
+        try:
+            remove_gateway_access_label(INFRA_NAMESPACE, case["gateway_name"])
+        except Exception as exc:  # noqa: BLE001
+            print(f"[cleanup] failed to remove gateway access label for {case['gateway_name']}: {exc}")
 
 
 def legacy_default_namespace() -> str:
