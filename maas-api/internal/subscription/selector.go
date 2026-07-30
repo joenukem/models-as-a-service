@@ -228,6 +228,9 @@ func (s *Selector) Select(groups []string, username string, requestedSubscriptio
 	var authorizedSet map[authpolicy.ModelKey]bool
 	if s.accessChecker != nil {
 		authorizedSet = s.accessChecker.AuthorizedModels(groups, username)
+		if authorizedSet == nil {
+			authorizedSet = map[authpolicy.ModelKey]bool{}
+		}
 	}
 
 	// Branch 1: Explicit subscription selection (with validation)
@@ -280,6 +283,21 @@ func (s *Selector) Select(groups []string, username string, requestedSubscriptio
 		}
 	}
 
+	// Filter auto-selection candidates by model authorization before ambiguity check
+	modelMatched := len(accessibleSubs) > 0
+	if requestedModel != "" && authorizedSet != nil {
+		authorizedSubs := make([]subscription, 0, len(accessibleSubs))
+		for i := range accessibleSubs {
+			if isResolvedModelAuthorized(&accessibleSubs[i], requestedModel, authorizedSet) {
+				authorizedSubs = append(authorizedSubs, accessibleSubs[i])
+			}
+		}
+		if modelMatched && len(authorizedSubs) == 0 {
+			return nil, &AccessDeniedError{Subscription: requestedModel}
+		}
+		accessibleSubs = authorizedSubs
+	}
+
 	if len(accessibleSubs) == 0 {
 		return nil, &NoSubscriptionError{}
 	}
@@ -327,6 +345,9 @@ func (s *Selector) SelectHighestPriority(groups []string, username string) (*Sel
 	resp := toResponse(&accessible[0])
 	if s.accessChecker != nil {
 		authorizedSet := s.accessChecker.AuthorizedModels(groups, username)
+		if authorizedSet == nil {
+			authorizedSet = map[authpolicy.ModelKey]bool{}
+		}
 		resp.ModelRefs = filterAuthorizedModels(resp.ModelRefs, authorizedSet)
 	}
 	return resp, nil
@@ -766,6 +787,9 @@ func (s *Selector) ListAccessibleForModel(username string, groups []string, mode
 	var authorizedSet map[authpolicy.ModelKey]bool
 	if s.accessChecker != nil {
 		authorizedSet = s.accessChecker.AuthorizedModels(groups, username)
+		if authorizedSet == nil {
+			authorizedSet = map[authpolicy.ModelKey]bool{}
+		}
 	}
 
 	result := []SubscriptionInfo{}

@@ -1356,6 +1356,49 @@ func TestSelect_FiltersModelRefsByAuthPolicy(t *testing.T) {
 			requestedModel: "ns/model-a",
 			wantModelNames: []string{"model-a"},
 		},
+		{
+			name: "Select with nil authorizedSet (checker error) fails closed",
+			subscriptions: []*unstructured.Unstructured{
+				createSubscriptionWithModelRefs("sub1", []string{"g1"}, []map[string]any{
+					{"name": "model-a", "namespace": "ns"},
+					{"name": "model-b", "namespace": "ns"},
+				}),
+			},
+			withChecker:    true,
+			groups:         []string{"g1"},
+			wantModelNames: []string{},
+		},
+		{
+			name: "Select auto with nil authorizedSet rejects requestedModel",
+			subscriptions: []*unstructured.Unstructured{
+				createSubscriptionWithModelRefs("sub1", []string{"g1"}, []map[string]any{
+					{"name": "model-a", "namespace": "ns"},
+				}),
+			},
+			withChecker:        true,
+			groups:             []string{"g1"},
+			requestedModel:     "ns/model-a",
+			expectError:        true,
+			expectAccessDenied: true,
+		},
+		{
+			name: "Select auto two subscriptions unauthorized model returns AccessDeniedError",
+			subscriptions: []*unstructured.Unstructured{
+				createSubscriptionWithModelRefs("sub1", []string{"g1"}, []map[string]any{
+					{"name": "model-a", "namespace": "ns"},
+				}),
+				createSubscriptionWithModelRefs("sub2", []string{"g1"}, []map[string]any{
+					{"name": "model-a", "namespace": "ns"},
+				}),
+			},
+			authorized: map[authpolicy.ModelKey]bool{
+				{Namespace: "ns", Name: "model-b"}: true,
+			},
+			groups:             []string{"g1"},
+			requestedModel:     "ns/model-a",
+			expectError:        true,
+			expectAccessDenied: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1442,6 +1485,18 @@ func TestSelectHighestPriority_FiltersModelRefsByAuthPolicy(t *testing.T) {
 			},
 			groups:         []string{"g1"},
 			wantModelNames: []string{"model-a", "model-b"},
+		},
+		{
+			name: "nil authorizedSet (checker error) fails closed",
+			subscriptions: []*unstructured.Unstructured{
+				createSubscriptionWithModelRefs("sub1", []string{"g1"}, []map[string]any{
+					{"name": "model-a", "namespace": "ns"},
+					{"name": "model-b", "namespace": "ns"},
+				}),
+			},
+			withChecker:    true,
+			groups:         []string{"g1"},
+			wantModelNames: []string{},
 		},
 	}
 
