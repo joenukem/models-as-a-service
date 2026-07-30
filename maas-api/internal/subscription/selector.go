@@ -203,6 +203,40 @@ func filterAuthorizedModels(refs []ModelRefInfo, authorizedSet map[authpolicy.Mo
 	return out
 }
 
+// selectExplicit handles the explicit subscription selection branch of Select.
+// It supports both "namespace/name" and bare "name" formats.
+func selectExplicit(subscriptions []subscription, requestedSubscription, requestedModel, username string, groups []string, authorizedSet map[authpolicy.ModelKey]bool) (*SelectResponse, error) {
+	for _, sub := range subscriptions {
+		qualifiedName := fmt.Sprintf("%s/%s", sub.Namespace, sub.Name)
+		if qualifiedName == requestedSubscription {
+			if !userHasAccess(&sub, username, groups) {
+				return nil, &AccessDeniedError{Subscription: requestedSubscription}
+			}
+			if requestedModel != "" && !subscriptionIncludesModel(&sub, requestedModel) {
+				return nil, &ModelNotInSubscriptionError{Subscription: requestedSubscription, Model: requestedModel}
+			}
+			return buildAuthorizedResponse(&sub, requestedSubscription, requestedModel, authorizedSet)
+		}
+	}
+
+	if !strings.Contains(requestedSubscription, "/") {
+		for _, sub := range subscriptions {
+			if sub.Name != requestedSubscription {
+				continue
+			}
+			if !userHasAccess(&sub, username, groups) {
+				return nil, &AccessDeniedError{Subscription: requestedSubscription}
+			}
+			if requestedModel != "" && !subscriptionIncludesModel(&sub, requestedModel) {
+				return nil, &ModelNotInSubscriptionError{Subscription: requestedSubscription, Model: requestedModel}
+			}
+			return buildAuthorizedResponse(&sub, requestedSubscription, requestedModel, authorizedSet)
+		}
+	}
+
+	return nil, &SubscriptionNotFoundError{Subscription: requestedSubscription}
+}
+
 // Select implements the subscription selection logic.
 // Returns the selected subscription or an error if none found.
 // If requestedModel is provided, validates that the selected subscription includes that model.
@@ -222,7 +256,6 @@ func (s *Selector) Select(groups []string, username string, requestedSubscriptio
 		return nil, &NoSubscriptionError{}
 	}
 
-	// Sort by priority (desc), then maxLimit (desc)
 	sortSubscriptionsByPriority(subscriptions)
 
 	var authorizedSet map[authpolicy.ModelKey]bool
@@ -233,49 +266,14 @@ func (s *Selector) Select(groups []string, username string, requestedSubscriptio
 		}
 	}
 
-	// Branch 1: Explicit subscription selection (with validation)
-	// Support both formats: "namespace/name" and bare "name"
 	if requestedSubscription != "" {
-		// First, try exact qualified match (namespace/name)
-		for _, sub := range subscriptions {
-			qualifiedName := fmt.Sprintf("%s/%s", sub.Namespace, sub.Name)
-			if qualifiedName == requestedSubscription {
-				if !userHasAccess(&sub, username, groups) {
-					return nil, &AccessDeniedError{Subscription: requestedSubscription}
-				}
-				// Validate subscription includes the requested model
-				if requestedModel != "" && !subscriptionIncludesModel(&sub, requestedModel) {
-					return nil, &ModelNotInSubscriptionError{Subscription: requestedSubscription, Model: requestedModel}
-				}
-				return buildAuthorizedResponse(&sub, requestedSubscription, requestedModel, authorizedSet)
-			}
-		}
-
-		// If no qualified match found and request is bare name (no '/'), try bare name matching
-		if !strings.Contains(requestedSubscription, "/") {
-			for _, sub := range subscriptions {
-				if sub.Name != requestedSubscription {
-					continue
-				}
-				if !userHasAccess(&sub, username, groups) {
-					return nil, &AccessDeniedError{Subscription: requestedSubscription}
-				}
-				if requestedModel != "" && !subscriptionIncludesModel(&sub, requestedModel) {
-					return nil, &ModelNotInSubscriptionError{Subscription: requestedSubscription, Model: requestedModel}
-				}
-				return buildAuthorizedResponse(&sub, requestedSubscription, requestedModel, authorizedSet)
-			}
-		}
-
-		// Request had '/' but no match found
-		return nil, &SubscriptionNotFoundError{Subscription: requestedSubscription}
+		return selectExplicit(subscriptions, requestedSubscription, requestedModel, username, groups, authorizedSet)
 	}
 
-	// Branch 2: Auto-selection
+	// Auto-selection
 	var accessibleSubs []subscription
 	for _, sub := range subscriptions {
 		if userHasAccess(&sub, username, groups) {
-			// If model is specified, only include subscriptions that contain that model
 			if requestedModel != "" && !subscriptionIncludesModel(&sub, requestedModel) {
 				continue
 			}
@@ -306,7 +304,6 @@ func (s *Selector) Select(groups []string, username string, requestedSubscriptio
 		return buildAuthorizedResponse(&accessibleSubs[0], accessibleSubs[0].Name, requestedModel, authorizedSet)
 	}
 
-	// User has multiple subscriptions - require explicit selection
 	subNames := make([]string, len(accessibleSubs))
 	for i, sub := range accessibleSubs {
 		subNames[i] = sub.Name
