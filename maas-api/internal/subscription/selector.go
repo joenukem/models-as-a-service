@@ -168,6 +168,17 @@ func (s *Selector) GetAllAccessible(groups []string, username string) ([]*Select
 	return accessible, nil
 }
 
+func isResolvedModelAuthorized(sub *subscription, requestedModel string, authorizedSet map[authpolicy.ModelKey]bool) bool {
+	if authorizedSet == nil || requestedModel == "" {
+		return true
+	}
+	ref := findModelRef(sub, requestedModel)
+	if ref == nil {
+		return false
+	}
+	return authorizedSet[authpolicy.ModelKey{Namespace: ref.Namespace, Name: ref.Name}]
+}
+
 func filterAuthorizedModels(refs []ModelRefInfo, authorizedSet map[authpolicy.ModelKey]bool) []ModelRefInfo {
 	out := make([]ModelRefInfo, 0, len(refs))
 	for _, ref := range refs {
@@ -219,6 +230,9 @@ func (s *Selector) Select(groups []string, username string, requestedSubscriptio
 				if requestedModel != "" && !subscriptionIncludesModel(&sub, requestedModel) {
 					return nil, &ModelNotInSubscriptionError{Subscription: requestedSubscription, Model: requestedModel}
 				}
+				if !isResolvedModelAuthorized(&sub, requestedModel, authorizedSet) {
+					return nil, &AccessDeniedError{Subscription: requestedSubscription}
+				}
 				// Check model health for Degraded subscriptions
 				if err := checkModelHealth(&sub, requestedModel); err != nil {
 					return nil, err
@@ -242,6 +256,9 @@ func (s *Selector) Select(groups []string, username string, requestedSubscriptio
 				}
 				if requestedModel != "" && !subscriptionIncludesModel(&sub, requestedModel) {
 					return nil, &ModelNotInSubscriptionError{Subscription: requestedSubscription, Model: requestedModel}
+				}
+				if !isResolvedModelAuthorized(&sub, requestedModel, authorizedSet) {
+					return nil, &AccessDeniedError{Subscription: requestedSubscription}
 				}
 				// Check model health for Degraded subscriptions
 				if err := checkModelHealth(&sub, requestedModel); err != nil {
@@ -276,6 +293,9 @@ func (s *Selector) Select(groups []string, username string, requestedSubscriptio
 	}
 
 	if len(accessibleSubs) == 1 {
+		if !isResolvedModelAuthorized(&accessibleSubs[0], requestedModel, authorizedSet) {
+			return nil, &AccessDeniedError{Subscription: accessibleSubs[0].Name}
+		}
 		// Check model health for Degraded subscriptions
 		if err := checkModelHealth(&accessibleSubs[0], requestedModel); err != nil {
 			return nil, err

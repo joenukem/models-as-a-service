@@ -1290,6 +1290,68 @@ func TestSelect_FiltersModelRefsByAuthPolicy(t *testing.T) {
 			groups:         []string{"g1"},
 			wantModelNames: []string{"model-a", "model-b"},
 		},
+		{
+			name: "Select auto rejects unauthorized requestedModel",
+			subscriptions: []*unstructured.Unstructured{
+				createSubscriptionWithModelRefs("sub1", []string{"g1"}, []map[string]any{
+					{"name": "model-a", "namespace": "ns"},
+					{"name": "model-b", "namespace": "ns"},
+				}),
+			},
+			authorized: map[authpolicy.ModelKey]bool{
+				{Namespace: "ns", Name: "model-a"}: true,
+			},
+			groups:         []string{"g1"},
+			requestedModel: "ns/model-b",
+			expectError:    true,
+		},
+		{
+			name: "Select explicit subscription rejects unauthorized requestedModel",
+			subscriptions: []*unstructured.Unstructured{
+				createSubscriptionWithModelRefs("sub1", []string{"g1"}, []map[string]any{
+					{"name": "model-a", "namespace": "ns"},
+					{"name": "model-b", "namespace": "ns"},
+				}),
+			},
+			authorized: map[authpolicy.ModelKey]bool{
+				{Namespace: "ns", Name: "model-a"}: true,
+			},
+			groups:         []string{"g1"},
+			requestedSub:   "sub1",
+			requestedModel: "ns/model-b",
+			expectError:    true,
+		},
+		{
+			name: "Select qualified subscription rejects unauthorized requestedModel",
+			subscriptions: []*unstructured.Unstructured{
+				createSubscriptionWithModelRefs("sub1", []string{"g1"}, []map[string]any{
+					{"name": "model-a", "namespace": "ns"},
+					{"name": "model-b", "namespace": "ns"},
+				}),
+			},
+			authorized: map[authpolicy.ModelKey]bool{
+				{Namespace: "ns", Name: "model-a"}: true,
+			},
+			groups:         []string{"g1"},
+			requestedSub:   "test-ns/sub1",
+			requestedModel: "ns/model-b",
+			expectError:    true,
+		},
+		{
+			name: "Select auto allows authorized requestedModel",
+			subscriptions: []*unstructured.Unstructured{
+				createSubscriptionWithModelRefs("sub1", []string{"g1"}, []map[string]any{
+					{"name": "model-a", "namespace": "ns"},
+					{"name": "model-b", "namespace": "ns"},
+				}),
+			},
+			authorized: map[authpolicy.ModelKey]bool{
+				{Namespace: "ns", Name: "model-a"}: true,
+			},
+			groups:         []string{"g1"},
+			requestedModel: "ns/model-a",
+			wantModelNames: []string{"model-a"},
+		},
 	}
 
 	for _, tt := range tests {
