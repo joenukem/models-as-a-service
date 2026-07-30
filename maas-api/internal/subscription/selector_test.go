@@ -1223,16 +1223,17 @@ func TestSelect_FiltersModelRefsByAuthPolicy(t *testing.T) {
 	log := logger.New(false)
 
 	tests := []struct {
-		name             string
-		subscriptions    []*unstructured.Unstructured
-		authorized       map[authpolicy.ModelKey]bool
-		withChecker      bool
-		groups           []string
-		username         string
-		requestedSub     string
-		requestedModel   string
-		wantModelNames   []string
-		expectError      bool
+		name               string
+		subscriptions      []*unstructured.Unstructured
+		authorized         map[authpolicy.ModelKey]bool
+		withChecker        bool
+		groups             []string
+		username           string
+		requestedSub       string
+		requestedModel     string
+		wantModelNames     []string
+		expectError        bool
+		expectAccessDenied bool
 	}{
 		{
 			name: "Select auto filters modelRefs by AuthPolicy",
@@ -1301,9 +1302,10 @@ func TestSelect_FiltersModelRefsByAuthPolicy(t *testing.T) {
 			authorized: map[authpolicy.ModelKey]bool{
 				{Namespace: "ns", Name: "model-a"}: true,
 			},
-			groups:         []string{"g1"},
-			requestedModel: "ns/model-b",
-			expectError:    true,
+			groups:             []string{"g1"},
+			requestedModel:     "ns/model-b",
+			expectError:        true,
+			expectAccessDenied: true,
 		},
 		{
 			name: "Select explicit subscription rejects unauthorized requestedModel",
@@ -1316,10 +1318,11 @@ func TestSelect_FiltersModelRefsByAuthPolicy(t *testing.T) {
 			authorized: map[authpolicy.ModelKey]bool{
 				{Namespace: "ns", Name: "model-a"}: true,
 			},
-			groups:         []string{"g1"},
-			requestedSub:   "sub1",
-			requestedModel: "ns/model-b",
-			expectError:    true,
+			groups:             []string{"g1"},
+			requestedSub:       "sub1",
+			requestedModel:     "ns/model-b",
+			expectError:        true,
+			expectAccessDenied: true,
 		},
 		{
 			name: "Select qualified subscription rejects unauthorized requestedModel",
@@ -1332,10 +1335,11 @@ func TestSelect_FiltersModelRefsByAuthPolicy(t *testing.T) {
 			authorized: map[authpolicy.ModelKey]bool{
 				{Namespace: "ns", Name: "model-a"}: true,
 			},
-			groups:         []string{"g1"},
-			requestedSub:   "test-ns/sub1",
-			requestedModel: "ns/model-b",
-			expectError:    true,
+			groups:             []string{"g1"},
+			requestedSub:       "test-ns/sub1",
+			requestedModel:     "ns/model-b",
+			expectError:        true,
+			expectAccessDenied: true,
 		},
 		{
 			name: "Select auto allows authorized requestedModel",
@@ -1371,6 +1375,12 @@ func TestSelect_FiltersModelRefsByAuthPolicy(t *testing.T) {
 			if tt.expectError {
 				if err == nil {
 					t.Fatal("expected error, got nil")
+				}
+				if tt.expectAccessDenied {
+					var accessDenied *subscription.AccessDeniedError
+					if !errors.As(err, &accessDenied) {
+						t.Fatalf("expected AccessDeniedError, got %T: %v", err, err)
+					}
 				}
 				return
 			}

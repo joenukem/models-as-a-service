@@ -179,6 +179,20 @@ func isResolvedModelAuthorized(sub *subscription, requestedModel string, authori
 	return authorizedSet[authpolicy.ModelKey{Namespace: ref.Namespace, Name: ref.Name}]
 }
 
+func buildAuthorizedResponse(sub *subscription, subscriptionLabel, requestedModel string, authorizedSet map[authpolicy.ModelKey]bool) (*SelectResponse, error) {
+	if !isResolvedModelAuthorized(sub, requestedModel, authorizedSet) {
+		return nil, &AccessDeniedError{Subscription: subscriptionLabel}
+	}
+	if err := checkModelHealth(sub, requestedModel); err != nil {
+		return nil, err
+	}
+	resp := toResponseWithResolvedModel(sub, requestedModel)
+	if authorizedSet != nil {
+		resp.ModelRefs = filterAuthorizedModels(resp.ModelRefs, authorizedSet)
+	}
+	return resp, nil
+}
+
 func filterAuthorizedModels(refs []ModelRefInfo, authorizedSet map[authpolicy.ModelKey]bool) []ModelRefInfo {
 	out := make([]ModelRefInfo, 0, len(refs))
 	for _, ref := range refs {
@@ -230,18 +244,7 @@ func (s *Selector) Select(groups []string, username string, requestedSubscriptio
 				if requestedModel != "" && !subscriptionIncludesModel(&sub, requestedModel) {
 					return nil, &ModelNotInSubscriptionError{Subscription: requestedSubscription, Model: requestedModel}
 				}
-				if !isResolvedModelAuthorized(&sub, requestedModel, authorizedSet) {
-					return nil, &AccessDeniedError{Subscription: requestedSubscription}
-				}
-				// Check model health for Degraded subscriptions
-				if err := checkModelHealth(&sub, requestedModel); err != nil {
-					return nil, err
-				}
-				resp := toResponseWithResolvedModel(&sub, requestedModel)
-				if authorizedSet != nil {
-					resp.ModelRefs = filterAuthorizedModels(resp.ModelRefs, authorizedSet)
-				}
-				return resp, nil
+				return buildAuthorizedResponse(&sub, requestedSubscription, requestedModel, authorizedSet)
 			}
 		}
 
@@ -257,18 +260,7 @@ func (s *Selector) Select(groups []string, username string, requestedSubscriptio
 				if requestedModel != "" && !subscriptionIncludesModel(&sub, requestedModel) {
 					return nil, &ModelNotInSubscriptionError{Subscription: requestedSubscription, Model: requestedModel}
 				}
-				if !isResolvedModelAuthorized(&sub, requestedModel, authorizedSet) {
-					return nil, &AccessDeniedError{Subscription: requestedSubscription}
-				}
-				// Check model health for Degraded subscriptions
-				if err := checkModelHealth(&sub, requestedModel); err != nil {
-					return nil, err
-				}
-				resp := toResponseWithResolvedModel(&sub, requestedModel)
-				if authorizedSet != nil {
-					resp.ModelRefs = filterAuthorizedModels(resp.ModelRefs, authorizedSet)
-				}
-				return resp, nil
+				return buildAuthorizedResponse(&sub, requestedSubscription, requestedModel, authorizedSet)
 			}
 		}
 
@@ -293,18 +285,7 @@ func (s *Selector) Select(groups []string, username string, requestedSubscriptio
 	}
 
 	if len(accessibleSubs) == 1 {
-		if !isResolvedModelAuthorized(&accessibleSubs[0], requestedModel, authorizedSet) {
-			return nil, &AccessDeniedError{Subscription: accessibleSubs[0].Name}
-		}
-		// Check model health for Degraded subscriptions
-		if err := checkModelHealth(&accessibleSubs[0], requestedModel); err != nil {
-			return nil, err
-		}
-		resp := toResponseWithResolvedModel(&accessibleSubs[0], requestedModel)
-		if authorizedSet != nil {
-			resp.ModelRefs = filterAuthorizedModels(resp.ModelRefs, authorizedSet)
-		}
-		return resp, nil
+		return buildAuthorizedResponse(&accessibleSubs[0], accessibleSubs[0].Name, requestedModel, authorizedSet)
 	}
 
 	// User has multiple subscriptions - require explicit selection
