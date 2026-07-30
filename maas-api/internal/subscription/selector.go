@@ -200,6 +200,11 @@ func (s *Selector) Select(groups []string, username string, requestedSubscriptio
 	// Sort by priority (desc), then maxLimit (desc)
 	sortSubscriptionsByPriority(subscriptions)
 
+	var authorizedSet map[authpolicy.ModelKey]bool
+	if s.accessChecker != nil {
+		authorizedSet = s.accessChecker.AuthorizedModels(groups, username)
+	}
+
 	// Branch 1: Explicit subscription selection (with validation)
 	// Support both formats: "namespace/name" and bare "name"
 	if requestedSubscription != "" {
@@ -218,7 +223,11 @@ func (s *Selector) Select(groups []string, username string, requestedSubscriptio
 				if err := checkModelHealth(&sub, requestedModel); err != nil {
 					return nil, err
 				}
-				return toResponseWithResolvedModel(&sub, requestedModel), nil
+				resp := toResponseWithResolvedModel(&sub, requestedModel)
+				if authorizedSet != nil {
+					resp.ModelRefs = filterAuthorizedModels(resp.ModelRefs, authorizedSet)
+				}
+				return resp, nil
 			}
 		}
 
@@ -238,7 +247,11 @@ func (s *Selector) Select(groups []string, username string, requestedSubscriptio
 				if err := checkModelHealth(&sub, requestedModel); err != nil {
 					return nil, err
 				}
-				return toResponseWithResolvedModel(&sub, requestedModel), nil
+				resp := toResponseWithResolvedModel(&sub, requestedModel)
+				if authorizedSet != nil {
+					resp.ModelRefs = filterAuthorizedModels(resp.ModelRefs, authorizedSet)
+				}
+				return resp, nil
 			}
 		}
 
@@ -267,7 +280,11 @@ func (s *Selector) Select(groups []string, username string, requestedSubscriptio
 		if err := checkModelHealth(&accessibleSubs[0], requestedModel); err != nil {
 			return nil, err
 		}
-		return toResponseWithResolvedModel(&accessibleSubs[0], requestedModel), nil
+		resp := toResponseWithResolvedModel(&accessibleSubs[0], requestedModel)
+		if authorizedSet != nil {
+			resp.ModelRefs = filterAuthorizedModels(resp.ModelRefs, authorizedSet)
+		}
+		return resp, nil
 	}
 
 	// User has multiple subscriptions - require explicit selection
@@ -306,7 +323,12 @@ func (s *Selector) SelectHighestPriority(groups []string, username string) (*Sel
 	}
 
 	sortSubscriptionsByPriority(accessible)
-	return toResponse(&accessible[0]), nil
+	resp := toResponse(&accessible[0])
+	if s.accessChecker != nil {
+		authorizedSet := s.accessChecker.AuthorizedModels(groups, username)
+		resp.ModelRefs = filterAuthorizedModels(resp.ModelRefs, authorizedSet)
+	}
+	return resp, nil
 }
 
 // loadSubscriptions fetches and parses MaaSSubscription resources.
