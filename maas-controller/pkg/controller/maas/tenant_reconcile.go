@@ -331,7 +331,9 @@ func (r *TenantReconciler) reconcilePlatform(
 	}
 
 	if err := r.ensureGatewayManagementAuth(ctx, log, tenant); err != nil {
-		log.Error(err, "failed to ensure gateway management auth (non-fatal)")
+		log.Error(err, "failed to ensure gateway management auth, will retry")
+		res := ctrl.Result{RequeueAfter: 45 * time.Second}
+		return &res, nil
 	}
 
 	surfaceReplicaWarnings(tenant, runRes)
