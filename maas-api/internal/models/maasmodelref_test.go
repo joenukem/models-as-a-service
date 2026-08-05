@@ -1,11 +1,11 @@
-package models
+package models //nolint:testpackage // tests access unexported maasModelRefToModel and kind constants
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -25,7 +25,7 @@ func TestMaasModelRefToModel_LLMISvcUsesModelRefName(t *testing.T) {
 			modelRefName:  "qwen3-8b-fp8-dynamic",
 			resolvedAlias: "publishers/ai-eng-cracow/models/qwen3-8b-fp8-dynamic",
 			expectedID:    "qwen3-8b-fp8-dynamic",
-			expectedKind:  kindLLMISvc,
+			expectedKind:  kindLLMISvcAlternate,
 			modelRefKind:  "LLMInferenceService",
 		},
 		{
@@ -34,7 +34,7 @@ func TestMaasModelRefToModel_LLMISvcUsesModelRefName(t *testing.T) {
 			modelRefName:  "llama-7b",
 			resolvedAlias: "",
 			expectedID:    "llama-7b",
-			expectedKind:  kindLLMISvc,
+			expectedKind:  kindLLMISvcAlternate,
 			modelRefKind:  "LLMInferenceService",
 		},
 		{
@@ -43,7 +43,7 @@ func TestMaasModelRefToModel_LLMISvcUsesModelRefName(t *testing.T) {
 			modelRefName:  "",
 			resolvedAlias: "publishers/ns/models/some-model",
 			expectedID:    "my-model",
-			expectedKind:  kindLLMISvc,
+			expectedKind:  kindLLMISvcAlternate,
 			modelRefKind:  "LLMInferenceService",
 		},
 		{
@@ -74,7 +74,7 @@ func TestMaasModelRefToModel_LLMISvcUsesModelRefName(t *testing.T) {
 				"metadata": map[string]any{
 					"name":              tc.metadataName,
 					"namespace":         "test-ns",
-					"creationTimestamp": metav1.Now().Format("2006-01-02T15:04:05Z"),
+					"creationTimestamp": time.Now().Format("2006-01-02T15:04:05Z"),
 				},
 				"spec": map[string]any{
 					"modelRef": map[string]any{
