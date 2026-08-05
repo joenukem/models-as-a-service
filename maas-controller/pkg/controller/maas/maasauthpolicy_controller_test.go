@@ -902,11 +902,45 @@ func TestMaaSAuthPolicyReconciler_MultiplePoliciesDeletion(t *testing.T) {
 		t.Fatalf("Reconcile policy2 deletion: %v", err)
 	}
 
-	// maas-gateway-auth should STILL EXIST after deleting all MaaSAuthPolicy CRs.
+	// maas-gateway-auth should STILL EXIST after deleting all MaaSAuthPolicy CRs,
+	// but reset to base version with empty model access.
 	authPolicy = &unstructured.Unstructured{}
 	authPolicy.SetGroupVersionKind(schema.GroupVersionKind{Group: "kuadrant.io", Version: "v1", Kind: "AuthPolicy"})
 	if err := c.Get(context.Background(), types.NamespacedName{Name: "maas-gateway-auth", Namespace: gatewayNS}, authPolicy); err != nil {
-		t.Errorf("maas-gateway-auth should be kept after deleting last parent policy, but got: %v", err)
+		t.Fatalf("maas-gateway-auth should be kept after deleting last parent policy, but got: %v", err)
+	}
+
+	// Verify the rego was reset to empty model access "{}"
+	spec, ok, _ := unstructured.NestedMap(authPolicy.Object, "spec")
+	if !ok {
+		t.Fatal("maas-gateway-auth missing spec after reset")
+	}
+	defaults, ok, _ := unstructured.NestedMap(spec, "defaults")
+	if !ok {
+		t.Fatal("maas-gateway-auth missing spec.defaults after reset")
+	}
+	rules, ok, _ := unstructured.NestedMap(defaults, "rules")
+	if !ok {
+		t.Fatal("maas-gateway-auth missing spec.defaults.rules after reset")
+	}
+	authzRules, ok, _ := unstructured.NestedMap(rules, "authorization")
+	if !ok {
+		t.Fatal("maas-gateway-auth missing authorization rules after reset")
+	}
+	groupMembership, ok := authzRules["require-group-membership"].(map[string]any)
+	if !ok {
+		t.Fatal("maas-gateway-auth missing require-group-membership rule after reset")
+	}
+	opa, ok := groupMembership["opa"].(map[string]any)
+	if !ok {
+		t.Fatal("require-group-membership missing opa block after reset")
+	}
+	rego, ok := opa["rego"].(string)
+	if !ok {
+		t.Fatal("require-group-membership missing rego after reset")
+	}
+	if !strings.Contains(rego, "model_access := {}") {
+		t.Errorf("rego should contain empty model_access after reset, got:\n%s", rego)
 	}
 }
 

@@ -44,6 +44,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -1686,8 +1687,32 @@ func (r *MaaSAuthPolicyReconciler) handleDeletion(ctx context.Context, log logr.
 			}
 		}
 		if liveCount == 0 {
-			log.Info("all MaaSAuthPolicy CRs deleted, keeping maas-gateway-auth in place",
-				"tenantNamespace", policy.Namespace)
+			tenantID, err := r.fetchTenantIdentifier(ctx, log, policy.Namespace)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			gatewayNs, gatewayName, err := r.fetchGatewayInfo(ctx, log, policy.Namespace)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			isDefaultGateway := gatewayNs == r.GatewayNamespace && gatewayName == r.GatewayName
+			isNonDefaultTenant := tenantID != ""
+			if isNonDefaultTenant && isDefaultGateway {
+				log.Info("skipping gateway AuthPolicy reset: non-default tenant using shared default gateway",
+					"tenantID", tenantID,
+					"tenantNamespace", policy.Namespace,
+					"gatewayNamespace", gatewayNs,
+					"gatewayName", gatewayName)
+			} else {
+				oidc := r.fetchOIDCConfig(ctx, log, policy.Namespace)
+				xAPIKeyEnabled := r.discoverXAPIKeyNeeded(ctx, log)
+				if _, err := r.reconcileGatewayAuthPolicy(ctx, log, "{}", oidc, xAPIKeyEnabled, tenantID, gatewayNs, gatewayName); err != nil {
+					log.Error(err, "failed to reset gateway auth to base version")
+					return ctrl.Result{}, err
+				}
+				log.Info("reset maas-gateway-auth to base version (empty model access)",
+					"gatewayNamespace", gatewayNs, "gatewayName", gatewayName)
+			}
 		}
 
 		controllerutil.RemoveFinalizer(policy, maasAuthPolicyFinalizer)
@@ -1966,6 +1991,16 @@ func (r *MaaSAuthPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		b = b.Watches(&corev1.Namespace{}, handler.EnqueueRequestsFromMapFunc(
 			r.mapNamespaceToMaaSAuthPolicies,
 		), builder.WithPredicates(predicate.LabelChangedPredicate{}))
+	}
+
+	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		startLog := ctrl.Log.WithName("maas-authpolicy-controller").WithValues("phase", "startup")
+		if _, err := r.reconcileGatewayAuthPolicy(ctx, startLog, "{}", nil, false, "", r.GatewayNamespace, r.GatewayName); err != nil {
+			startLog.Error(err, "failed to ensure base maas-gateway-auth on startup (non-fatal)")
+		}
+		return nil
+	})); err != nil {
+		return err
 	}
 
 	c, err := b.Build(r)
