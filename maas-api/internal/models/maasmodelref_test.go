@@ -9,15 +9,20 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-func TestMaasModelRefToModel_LLMISvcUsesModelRefName(t *testing.T) {
+func TestMaasModelRefToModel_NilInput(t *testing.T) {
+	m := maasModelRefToModel(nil)
+	assert.Nil(t, m)
+}
+
+func TestMaasModelRefToModel_ModelID(t *testing.T) {
 	tests := []struct {
-		name              string
-		metadataName      string
-		modelRefName      string
-		resolvedAlias     string
-		expectedID        string
-		expectedKind      string
-		modelRefKind      string
+		name          string
+		metadataName  string
+		modelRefName  string
+		resolvedAlias string
+		expectedID    string
+		expectedKind  string
+		modelRefKind  string
 	}{
 		{
 			name:          "LLMInferenceService with resolvedModelAlias uses spec.modelRef.name",
@@ -47,13 +52,12 @@ func TestMaasModelRefToModel_LLMISvcUsesModelRefName(t *testing.T) {
 			modelRefKind:  "LLMInferenceService",
 		},
 		{
-			name:          "empty kind defaults to LLMInferenceService",
-			metadataName:  "my-model",
-			modelRefName:  "bert-base",
-			resolvedAlias: "publishers/ns/models/bert-base",
-			expectedID:    "bert-base",
-			expectedKind:  kindLLMISvc,
-			modelRefKind:  "",
+			name:         "empty kind defaults to llmisvc",
+			metadataName: "my-model",
+			modelRefName: "bert-base",
+			expectedID:   "bert-base",
+			expectedKind: kindLLMISvc,
+			modelRefKind: "",
 		},
 		{
 			name:          "ExternalModel uses spec.modelRef.name",
@@ -63,6 +67,14 @@ func TestMaasModelRefToModel_LLMISvcUsesModelRefName(t *testing.T) {
 			expectedID:    "gpt-4o-external",
 			expectedKind:  kindExternalModel,
 			modelRefKind:  "ExternalModel",
+		},
+		{
+			name:         "ExternalModel without modelRef.name falls back to metadata.name",
+			metadataName: "ext-ref",
+			modelRefName: "",
+			expectedID:   "ext-ref",
+			expectedKind: kindExternalModel,
+			modelRefKind: "ExternalModel",
 		},
 	}
 
