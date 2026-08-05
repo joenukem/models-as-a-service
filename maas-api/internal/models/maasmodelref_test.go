@@ -9,6 +9,12 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
+const (
+	testDefaultMetadataName = "my-model"
+	testExternalModelName   = "gpt-4o-external"
+	testExternalRefName     = "ext-ref"
+)
+
 func TestMaasModelRefToModel_NilInput(t *testing.T) {
 	m := maasModelRefToModel(nil)
 	assert.Nil(t, m)
@@ -26,34 +32,34 @@ func TestMaasModelRefToModel_ModelID(t *testing.T) {
 	}{
 		{
 			name:          "LLMInferenceService with resolvedModelAlias uses spec.modelRef.name",
-			metadataName:  "my-model",
+			metadataName:  testDefaultMetadataName,
 			modelRefName:  "qwen3-8b-fp8-dynamic",
 			resolvedAlias: "publishers/ai-eng-cracow/models/qwen3-8b-fp8-dynamic",
 			expectedID:    "qwen3-8b-fp8-dynamic",
 			expectedKind:  kindLLMISvcAlternate,
-			modelRefKind:  "LLMInferenceService",
+			modelRefKind:  kindLLMISvcAlternate,
 		},
 		{
 			name:          "LLMInferenceService without resolvedModelAlias uses spec.modelRef.name",
-			metadataName:  "my-model",
+			metadataName:  testDefaultMetadataName,
 			modelRefName:  "llama-7b",
 			resolvedAlias: "",
 			expectedID:    "llama-7b",
 			expectedKind:  kindLLMISvcAlternate,
-			modelRefKind:  "LLMInferenceService",
+			modelRefKind:  kindLLMISvcAlternate,
 		},
 		{
 			name:          "LLMInferenceService without modelRef.name falls back to metadata.name",
-			metadataName:  "my-model",
+			metadataName:  testDefaultMetadataName,
 			modelRefName:  "",
 			resolvedAlias: "publishers/ns/models/some-model",
-			expectedID:    "my-model",
+			expectedID:    testDefaultMetadataName,
 			expectedKind:  kindLLMISvcAlternate,
-			modelRefKind:  "LLMInferenceService",
+			modelRefKind:  kindLLMISvcAlternate,
 		},
 		{
 			name:         "empty kind defaults to llmisvc",
-			metadataName: "my-model",
+			metadataName: testDefaultMetadataName,
 			modelRefName: "bert-base",
 			expectedID:   "bert-base",
 			expectedKind: kindLLMISvc,
@@ -61,20 +67,20 @@ func TestMaasModelRefToModel_ModelID(t *testing.T) {
 		},
 		{
 			name:          "ExternalModel uses spec.modelRef.name",
-			metadataName:  "ext-ref",
-			modelRefName:  "gpt-4o-external",
-			resolvedAlias: "gpt-4o-external",
-			expectedID:    "gpt-4o-external",
+			metadataName:  testExternalRefName,
+			modelRefName:  testExternalModelName,
+			resolvedAlias: testExternalModelName,
+			expectedID:    testExternalModelName,
 			expectedKind:  kindExternalModel,
-			modelRefKind:  "ExternalModel",
+			modelRefKind:  kindExternalModel,
 		},
 		{
 			name:         "ExternalModel without modelRef.name falls back to metadata.name",
-			metadataName: "ext-ref",
+			metadataName: testExternalRefName,
 			modelRefName: "",
-			expectedID:   "ext-ref",
+			expectedID:   testExternalRefName,
 			expectedKind: kindExternalModel,
-			modelRefKind: "ExternalModel",
+			modelRefKind: kindExternalModel,
 		},
 	}
 
