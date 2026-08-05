@@ -1735,16 +1735,16 @@ func (r *MaaSAuthPolicyReconciler) ensureBaseGatewayAuthPolicy(
 	oidc *oidcConfig, xAPIKeyEnabled bool, tenantID, gatewayNamespace, gatewayName string,
 ) error {
 	authPolicyName := r.gatewayAuthPolicyName(gatewayNamespace, gatewayName)
+	if gatewayNamespace == r.GatewayNamespace && gatewayName == r.GatewayName {
+		r.deleteLegacyGatewayDefaultAuthPolicy(ctx, log)
+	}
+
 	existing := &unstructured.Unstructured{}
 	existing.SetGroupVersionKind(schema.GroupVersionKind{Group: "kuadrant.io", Version: "v1", Kind: "AuthPolicy"})
 	if err := r.Get(ctx, client.ObjectKey{Name: authPolicyName, Namespace: gatewayNamespace}, existing); err == nil {
 		return nil
 	} else if !apierrors.IsNotFound(err) {
 		return fmt.Errorf("failed to check gateway AuthPolicy %s/%s: %w", gatewayNamespace, authPolicyName, err)
-	}
-
-	if gatewayNamespace == r.GatewayNamespace && gatewayName == r.GatewayName {
-		r.deleteLegacyGatewayDefaultAuthPolicy(ctx, log)
 	}
 
 	_, err := r.reconcileGatewayAuthPolicy(ctx, log, "{}", oidc, xAPIKeyEnabled, tenantID, gatewayNamespace, gatewayName)
