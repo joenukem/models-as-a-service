@@ -1549,6 +1549,23 @@ func TestGetAllAccessible_AdminBypass(t *testing.T) {
 			t.Fatalf("expected 0 subscriptions, got %d", len(result))
 		}
 	})
+
+	t.Run("typed nil admin checker does not bypass group checks", func(t *testing.T) {
+		lister := &fakeLister{subscriptions: []*unstructured.Unstructured{
+			createSubscription("group-a-sub", []string{"group-a"}, nil, 10, defaultTestTokenRateLimit, "", ""),
+		}}
+		var nilChecker *fakeAdminChecker // typed nil
+		selector := subscription.NewSelector(log, lister, nil, nil).
+			WithAdminChecker(nilChecker)
+
+		result, err := selector.GetAllAccessible(context.Background(), []string{"other-group"}, "alice")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result) != 0 {
+			t.Fatalf("expected 0 subscriptions with typed-nil checker, got %d", len(result))
+		}
+	})
 }
 
 func TestSelect_AdminBypass(t *testing.T) {

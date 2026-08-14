@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -69,7 +70,15 @@ func NewSelector(log *logger.Logger, lister Lister, modelLister models.MaaSModel
 // WithAdminChecker returns the Selector with an AdminChecker configured.
 // When set, administrators bypass subscription group/user membership checks
 // and can see all subscriptions regardless of their group membership.
+// A typed nil (e.g. (*ConcreteType)(nil) stored in the interface) is
+// normalized to an untyped nil so isAdminUser's nil guard works correctly.
 func (s *Selector) WithAdminChecker(ac AdminChecker) *Selector {
+	if ac != nil {
+		v := reflect.ValueOf(ac)
+		if v.Kind() == reflect.Ptr && v.IsNil() {
+			ac = nil
+		}
+	}
 	s.adminChecker = ac
 	return s
 }
