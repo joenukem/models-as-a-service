@@ -9,8 +9,8 @@ import (
 
 	"github.com/opendatahub-io/models-as-a-service/maas-api/internal/authpolicy"
 	"github.com/opendatahub-io/models-as-a-service/maas-api/internal/logger"
-	"github.com/opendatahub-io/models-as-a-service/maas-api/internal/token"
 	"github.com/opendatahub-io/models-as-a-service/maas-api/internal/subscription"
+	"github.com/opendatahub-io/models-as-a-service/maas-api/internal/token"
 )
 
 const (
@@ -19,6 +19,7 @@ const (
 	phaseFailed                     = "Failed"
 	phasePending                    = "Pending"
 	phaseDegraded                   = "Degraded"
+	testTeamSubName                 = "team-sub"
 )
 
 // fakeLister implements subscription.Lister for testing.
@@ -1573,7 +1574,7 @@ func TestSelect_AdminBypass(t *testing.T) {
 
 	t.Run("admin can auto-select subscription not in their groups", func(t *testing.T) {
 		lister := &fakeLister{subscriptions: []*unstructured.Unstructured{
-			createSubscription("team-sub", []string{"team-group"}, nil, 10, defaultTestTokenRateLimit, "", ""),
+			createSubscription(testTeamSubName, []string{"team-group"}, nil, 10, defaultTestTokenRateLimit, "", ""),
 		}}
 		selector := subscription.NewSelector(log, lister, nil, nil).
 			WithAdminChecker(&fakeAdminChecker{isAdmin: true})
@@ -1583,54 +1584,54 @@ func TestSelect_AdminBypass(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if result.Name != "team-sub" {
+		if result.Name != testTeamSubName {
 			t.Errorf("expected team-sub, got %q", result.Name)
 		}
 	})
 
 	t.Run("admin can explicitly select subscription not in their groups", func(t *testing.T) {
 		lister := &fakeLister{subscriptions: []*unstructured.Unstructured{
-			createSubscription("team-sub", []string{"team-group"}, nil, 10, defaultTestTokenRateLimit, "", ""),
+			createSubscription(testTeamSubName, []string{"team-group"}, nil, 10, defaultTestTokenRateLimit, "", ""),
 		}}
 		selector := subscription.NewSelector(log, lister, nil, nil).
 			WithAdminChecker(&fakeAdminChecker{isAdmin: true})
 
 		//nolint:unqueryvet,nolintlint // False positive - not a SQL query
-		result, err := selector.Select(context.Background(), []string{"admin-group"}, "admin-user", "team-sub", "")
+		result, err := selector.Select(context.Background(), []string{"admin-group"}, "admin-user", testTeamSubName, "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if result.Name != "team-sub" {
+		if result.Name != testTeamSubName {
 			t.Errorf("expected team-sub, got %q", result.Name)
 		}
 	})
 
 	t.Run("admin can explicitly select subscription by qualified name", func(t *testing.T) {
 		lister := &fakeLister{subscriptions: []*unstructured.Unstructured{
-			createSubscription("team-sub", []string{"team-group"}, nil, 10, defaultTestTokenRateLimit, "", ""),
+			createSubscription(testTeamSubName, []string{"team-group"}, nil, 10, defaultTestTokenRateLimit, "", ""),
 		}}
 		selector := subscription.NewSelector(log, lister, nil, nil).
 			WithAdminChecker(&fakeAdminChecker{isAdmin: true})
 
 		//nolint:unqueryvet,nolintlint // False positive - not a SQL query
-		result, err := selector.Select(context.Background(), []string{"admin-group"}, "admin-user", "test-ns/team-sub", "")
+		result, err := selector.Select(context.Background(), []string{"admin-group"}, "admin-user", "test-ns/"+testTeamSubName, "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if result.Name != "team-sub" {
+		if result.Name != testTeamSubName {
 			t.Errorf("expected team-sub, got %q", result.Name)
 		}
 	})
 
 	t.Run("non-admin denied when not in subscription groups", func(t *testing.T) {
 		lister := &fakeLister{subscriptions: []*unstructured.Unstructured{
-			createSubscription("team-sub", []string{"team-group"}, nil, 10, defaultTestTokenRateLimit, "", ""),
+			createSubscription(testTeamSubName, []string{"team-group"}, nil, 10, defaultTestTokenRateLimit, "", ""),
 		}}
 		selector := subscription.NewSelector(log, lister, nil, nil).
 			WithAdminChecker(&fakeAdminChecker{isAdmin: false})
 
 		//nolint:unqueryvet,nolintlint // False positive - not a SQL query
-		_, err := selector.Select(context.Background(), []string{"other-group"}, "user", "team-sub", "")
+		_, err := selector.Select(context.Background(), []string{"other-group"}, "user", testTeamSubName, "")
 		if err == nil {
 			t.Fatal("expected error for non-admin user not in subscription groups")
 		}
