@@ -2,8 +2,8 @@
 #
 # Emits structured usage logs for inference requests via OTel Access Log Service.
 #
-# Identity:  All identity fields from auth identity FILTER_STATE
-#            (wasm.kuadrant.auth.identity.*), set by Kuadrant WASM plugin.
+# Identity:  Primary fields (user, groups, subscription) from Authorino-injected
+#            request headers (X-MaaS-*); secondary fields from FILTER_STATE.
 # Model:     Composite filter wraps json_to_metadata, executing only on
 #            inference paths (suffix match: /v1/chat/completions, /v1/completions).
 #            Extracts "model" from request body (covers 429),
@@ -343,16 +343,17 @@ spec:
                 - key: response_type
                   value:
                     string_value: '%CEL(response.code >= 200 && response.code < 300 ? "hit" : (response.code == 429 ? "rate_limit" : "error"))%'
-                # ── Identity ──
+                # ── Identity (Authorino-injected request headers) ──
                 - key: user_id
                   value:
-                    string_value: "%FILTER_STATE(wasm.kuadrant.auth.identity.userid:PLAIN)%"
+                    string_value: "%REQ(x-maas-username)%"
                 - key: subscription
                   value:
-                    string_value: "%FILTER_STATE(wasm.kuadrant.auth.identity.selected_subscription:PLAIN)%"
+                    string_value: "%REQ(x-maas-subscription)%"
                 - key: groups
                   value:
-                    string_value: "%FILTER_STATE(wasm.kuadrant.auth.identity.groups:PLAIN)%"
+                    string_value: "%REQ(x-maas-group)%"
+                # ── Identity (FILTER_STATE, API-key-only fields) ──
                 - key: key_id
                   value:
                     string_value: "%FILTER_STATE(wasm.kuadrant.auth.identity.keyId:PLAIN)%"

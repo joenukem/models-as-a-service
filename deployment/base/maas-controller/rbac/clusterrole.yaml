@@ -30,6 +30,12 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - pods/log
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
   - events
   verbs:
   - create
@@ -233,6 +239,15 @@ rules:
   - patch
   - watch
 - apiGroups:
+  - loki.grafana.com
+  resources:
+  - application
+  resourceNames:
+  - logs
+  verbs:
+  - create
+  - get
+- apiGroups:
   - maas.opendatahub.io
   resources:
   - aitenants
@@ -382,6 +397,7 @@ rules:
   resources:
   - clusterrolebindings
   - clusterroles
+  - rolebindings
   verbs:
   - create
   - delete
@@ -389,13 +405,6 @@ rules:
   - list
   - patch
   - watch
-- apiGroups:
-  - rbac.authorization.k8s.io
-  resources:
-  - rolebindings
-  verbs:
-  - delete
-  - get
 - apiGroups:
   - rbac.authorization.k8s.io
   resources:
