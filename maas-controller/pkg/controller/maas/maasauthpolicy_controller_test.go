@@ -1824,6 +1824,9 @@ func TestBuildGatewayAuthPolicySpec_RouteScopedRules(t *testing.T) {
 		if !contains(pred, "x-gateway-model-name") || !contains(pred, "maas-api") || !contains(pred, "v1") {
 			t.Errorf("subscription-valid when should scope to model routes and exclude management paths, got: %s", pred)
 		}
+		if !contains(pred, `request.path.startsWith("/notebook/")`) {
+			t.Errorf("subscription-valid when should exclude authenticated notebook routes, got: %s", pred)
+		}
 		if contains(pred, `startsWith("/llm/")`) {
 			t.Errorf("subscription-valid when should not be hard-coded to /llm/ routes, got: %s", pred)
 		}
