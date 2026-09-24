@@ -68,6 +68,11 @@ const (
 	DefaultMaaSAPIImage            = "quay.io/opendatahub/maas-api:latest"
 	DefaultPayloadProcessingImage  = "quay.io/opendatahub/odh-ai-gateway-payload-processing:odh-stable"
 	DefaultMaaSAPIKeyCleanupImage  = "registry.redhat.io/ubi9/ubi-minimal:9.7"
+	// cleanupCronJobRunAsUser is the numeric runtime identity the key-cleanup CronJob runs as.
+	// runAsNonRoot requires a numeric uid; override images with a symbolic USER (curlimages/curl's
+	// "curl_user", uid 100) are otherwise unprovable and every Job fails at container creation.
+	// 100 is curl_user in curlimages/curl and a valid unprivileged uid in ubi9-minimal (ai-a1045).
+	cleanupCronJobRunAsUser        = 100
 	DefaultAPIKeyMaxExpirationDays = "90"
 
 	// DefaultOTLPCollectorService is the platform DSCI OpenTelemetry collector Service name.

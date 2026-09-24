@@ -661,6 +661,20 @@ func patchCleanupCronJobImage(log logr.Logger, r *unstructured.Unstructured, par
 		return fmt.Errorf("patch cleanup CronJob image: %w", err)
 	}
 
+	// The image and the runtime identity must be validated together: runAsNonRoot is only
+	// satisfiable when the pod carries a NUMERIC uid. An override image whose USER is symbolic
+	// (curlimages/curl declares `curl_user`) fails every container creation with "image has
+	// non-numeric user" — the cleanup never ran for 28 days (ai-a1045). uid 100 works for every
+	// supported image (curl_user in curlimages/curl, an unprivileged uid in ubi9-minimal).
+	if err := unstructured.SetNestedField(r.Object, int64(cleanupCronJobRunAsUser),
+		"spec", "jobTemplate", "spec", "template", "spec", "securityContext", "runAsUser"); err != nil {
+		return fmt.Errorf("set cleanup CronJob runAsUser: %w", err)
+	}
+	if err := unstructured.SetNestedField(r.Object, true,
+		"spec", "jobTemplate", "spec", "template", "spec", "securityContext", "runAsNonRoot"); err != nil {
+		return fmt.Errorf("set cleanup CronJob runAsNonRoot: %w", err)
+	}
+
 	// Patch the cleanup command to use tenant-specific service name
 	containers, found, err := unstructured.NestedSlice(r.Object,
 		"spec", "jobTemplate", "spec", "template", "spec", "containers")

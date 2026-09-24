@@ -1974,3 +1974,133 @@ class TestAPIKeyLabels:
                              timeout=30, verify=TLS_VERIFY)
         assert r_get.status_code == 200
         assert r_get.json().get("labels") is None or r_get.json().get("labels") == {}
+    def test_cronjob_pod_identity_is_numeric(self, deployment_namespace: str):
+        """Verify the cleanup CronJob pod runs as a NUMERIC uid (ai-a1045).
+
+        runAsNonRoot is only satisfiable when the pod securityContext carries a numeric
+        runAsUser. An override image whose USER is symbolic (curlimages/curl declares
+        "curl_user") makes the kubelet refuse container creation entirely — every Job failed
+        with "image has non-numeric user" for 28 days while the declarative checks around it
+        stayed green. The image and the securityContext must be validated together.
+        """
+        import subprocess as sp
+
+        result = sp.run(
+            ["oc", "get", "cronjob", "maas-api-key-cleanup",
+             "-n", deployment_namespace, "-o", "json"],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            pytest.skip(
+                f"CronJob maas-api-key-cleanup not found in {deployment_namespace}: "
+                f"{result.stderr.strip()}"
+            )
+
+        import json as _json
+        cj = _json.loads(result.stdout)
+        pod_spec = cj["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+        pod_sec_ctx = pod_spec.get("securityContext") or {}
+        assert pod_sec_ctx.get("runAsNonRoot", False) is True, \
+            "Cleanup pod must declare runAsNonRoot"
+        run_as_user = pod_sec_ctx.get("runAsUser")
+        assert isinstance(run_as_user, int) and not isinstance(run_as_user, bool) and run_as_user >= 1, \
+            ("Cleanup pod securityContext.runAsUser must be a positive integer: a symbolic "
+             f"image USER cannot be verified non-root by the kubelet, got {run_as_user!r}")
+        print(f"[cleanup] Pod identity verified: runAsNonRoot=true, runAsUser={run_as_user} (numeric)")
+
+    def test_cleanup_job_completes_and_preserves_active_keys(
+        self, api_keys_base_url: str, headers: dict, deployment_namespace: str,
+    ):
+        """Create a Job from the rendered CronJob and require it to Complete (ai-a1045).
+
+        The pre-existing checks only read declarative fields; they never executed the
+        workload. This test creates a Job from the CronJob template, waits for completion
+        (the pod performs the real HTTPS cleanup call), asserts the well-formed cleanup
+        response, and proves an active ephemeral key survives the run. Removal of keys
+        expired beyond the 30-minute grace period is covered by the API's own store tests;
+        waiting 30+ minutes in E2E would not be bounded.
+        """
+        import subprocess as sp
+        import uuid as _uuid
+        import json as _json
+
+        job_name = f"e2e-cleanup-exec-{_uuid.uuid4().hex[:8]}"
+
+        # An active ephemeral key that must survive the cleanup run.
+        r = requests.post(
+            api_keys_base_url,
+            headers=headers,
+            json={"name": f"e2e-cleanup-job-{job_name[-8:]}", "ephemeral": True, "expiresIn": "1h"},
+            timeout=30, verify=TLS_VERIFY,
+        )
+        assert r.status_code in (200, 201), \
+            f"Expected 200/201 creating ephemeral key, got {r.status_code}: {r.text}"
+        key_id = r.json()["id"]
+        print(f"[cleanup-job] Created active ephemeral key {key_id} for the Job run")
+
+        create = sp.run(
+            ["oc", "create", "job", "--from=cronjob/maas-api-key-cleanup", job_name,
+             "-n", deployment_namespace],
+            capture_output=True, text=True,
+        )
+        if create.returncode != 0:
+            pytest.skip(f"Cannot create Job from cleanup CronJob: {create.stderr.strip()}")
+
+        try:
+            deadline = time.monotonic() + 180
+            complete = False
+            while time.monotonic() < deadline:
+                status = sp.run(
+                    ["oc", "get", "job", job_name, "-n", deployment_namespace, "-o", "json"],
+                    capture_output=True, text=True,
+                )
+                assert status.returncode == 0, f"Job {job_name} disappeared: {status.stderr.strip()}"
+                job = _json.loads(status.stdout)
+                conditions = job.get("status", {}).get("conditions") or []
+                for condition in conditions:
+                    if condition.get("type") == "Complete" and condition.get("status") == "True":
+                        complete = True
+                    if condition.get("type") == "Failed" and condition.get("status") == "True":
+                        failed_logs = sp.run(
+                            ["oc", "logs", f"job/{job_name}", "-n", deployment_namespace],
+                            capture_output=True, text=True,
+                        ).stdout[-800:]
+                        raise AssertionError(f"Cleanup Job {job_name} failed: {failed_logs}")
+                if complete:
+                    break
+                time.sleep(5)
+            assert complete, f"Cleanup Job {job_name} did not Complete within 180s"
+
+            # The completed pod performed the real HTTPS cleanup call; its output is the response.
+            logs = sp.run(
+                ["oc", "logs", f"job/{job_name}", "-n", deployment_namespace],
+                capture_output=True, text=True,
+            )
+            # The pod prints the cleanup endpoint's JSON response; find the deletedCount in it.
+            deleted_count = None
+            for line in reversed(logs.stdout.strip().splitlines()):
+                line = line.strip()
+                if line.startswith("{") and line.endswith("}"):
+                    try:
+                        deleted_count = _json.loads(line).get("deletedCount")
+                    except _json.JSONDecodeError:
+                        continue
+                    if deleted_count is not None:
+                        break
+            assert deleted_count is not None, \
+                f"Cleanup Job logs must contain the cleanup response JSON, got: {logs.stdout[-400:]!r}"
+            assert deleted_count >= 0, f"deletedCount must be non-negative, got {deleted_count}"
+            print(f"[cleanup-job] Job {job_name} Complete, cleanup deletedCount={deleted_count}")
+        finally:
+            sp.run(["oc", "delete", "job", job_name, "-n", deployment_namespace,
+                    "--ignore-not-found", "--wait=false"], capture_output=True, text=True)
+
+        # The active ephemeral key must survive a real cleanup execution.
+        r_get = requests.get(
+            f"{api_keys_base_url}/{key_id}", headers=headers, timeout=30, verify=TLS_VERIFY,
+        )
+        assert r_get.status_code == 200, \
+            f"Active ephemeral key {key_id} must survive a successful cleanup, got {r_get.status_code}"
+        assert r_get.json().get("status") == "active", \
+            f"Key should still be active after the cleanup Job ran, got: {r_get.json().get('status')}"
+        print(f"[cleanup-job] Active ephemeral key {key_id} survived the real cleanup Job run")

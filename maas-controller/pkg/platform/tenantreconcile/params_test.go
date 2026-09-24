@@ -1419,3 +1419,34 @@ func TestPatchPayloadProcessingDeployment_Resources(t *testing.T) {
 		assert.Equal(t, "200m", requests["cpu"])
 	})
 }
+
+// ai-a1045: runAsNonRoot is only satisfiable with a NUMERIC pod uid. The rendered overlay sets
+// runAsNonRoot without runAsUser, and an override image whose USER is symbolic (curlimages/curl's
+// "curl_user") then fails every container creation with "image has non-numeric user" — the live
+// cleanup CronJob never succeeded in 28 days. applyPlatformParams must pin the numeric identity
+// whenever it patches the cleanup image, so the final image and securityContext are validated together.
+func TestApplyPlatformParamsWithRenderedOverlay_CleanupCronJobNumericRunAsUser(t *testing.T) {
+	resources := renderOverlayResources(t, "tenant-ns")
+	overrideImage := "docker.io/curlimages/curl:8.16.0@sha256:463eaf6072688fe96ac64fa623fe73e1dbe25d8ad6c34404a669ad3ce1f104b6"
+	params := PlatformParams{ //nolint:gosec // APIKeyMaxExpirationDays is a duration setting, not a secret
+		AppNamespace:           "tenant-ns",
+		ControllerNamespace:    "controller-ns",
+		GatewayNamespace:       "gateway-ns",
+		SubscriptionNamespace:  "tenant-ns",
+		MaaSAPIKeyCleanupImage: overrideImage,
+	}
+
+	err := applyPlatformParams(logr.Discard(), resources, params)
+	require.NoError(t, err)
+
+	cleanupCronJob := requireResource(t, resources, GVKCronJob, MaaSAPIKeyCleanupCronJobName(""))
+	assert.Equal(t, overrideImage, requireContainerImage(t, cleanupCronJob, "spec", "jobTemplate", "spec", "template", "spec", "containers"))
+
+	podSecurityContext, found, err := unstructured.NestedMap(cleanupCronJob.Object,
+		"spec", "jobTemplate", "spec", "template", "spec", "securityContext")
+	require.NoError(t, err)
+	require.True(t, found, "cleanup CronJob pod securityContext must exist")
+	assert.Equal(t, true, podSecurityContext["runAsNonRoot"])
+	assert.Equal(t, int64(100), podSecurityContext["runAsUser"],
+		"the pod uid must be numeric so runAsNonRoot holds for symbolic-USER override images")
+}
