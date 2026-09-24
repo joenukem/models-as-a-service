@@ -21,6 +21,11 @@ spec:
           restartPolicy: OnFailure
           securityContext:
             runAsNonRoot: true
+            # Numeric identity, required: runAsNonRoot refuses an image whose USER is symbolic
+            # (ai-a1045 — the kubelet cannot verify "curl_user" is non-root, so every cleanup Job
+            # died at container creation). uid 100 is curl_user in curlimages/curl and an ordinary
+            # unprivileged uid in ubi9-minimal, so the CronJob stays safe across override images.
+            runAsUser: 100
           containers:
           - name: cleanup
             image: registry.redhat.io/ubi9/ubi-minimal:9.7

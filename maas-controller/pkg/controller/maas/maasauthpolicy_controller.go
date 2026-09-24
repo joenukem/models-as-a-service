@@ -420,7 +420,8 @@ const (
 	celPathParts                  = `request.path.split("/").filter(x, x != "")`
 	celPathModelIdentityAvailable = `size(` + celPathParts + `) >= 2 && ` +
 		celPathParts + `[0] != "v1" && ` +
-		celPathParts + `[0] != "maas-api"`
+		celPathParts + `[0] != "maas-api" && ` +
+		`!request.path.startsWith("/notebook/")`
 	celModelIdentityAvailable = `(` + celPathModelIdentityAvailable + ` || "x-gateway-model-name" in request.headers)`
 	celModelIdentity          = `(` + celPathModelIdentityAvailable +
 		` ? ` + celPathParts + `[0] + "/" + ` + celPathParts + `[1]` +

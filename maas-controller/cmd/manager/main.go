@@ -1155,9 +1155,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Auto-detect cluster audience from OpenShift/ROSA; fall back to the standard Kubernetes audience.
+	// Auto-detect cluster audience from OpenShift/ROSA; fall back to the issuer
+	// used by Franken's vanilla Kubernetes API.  The latter is also the issuer
+	// embedded in projected ServiceAccount tokens; using the service DNS alias
+	// here makes Authorino reject an otherwise valid token during TokenReview.
 	// Use GetAPIReader() instead of GetClient() because the cache hasn't started yet.
-	clusterAudience := "https://kubernetes.default.svc"
+	clusterAudience := "https://kubernetes.default.svc.cluster.local"
 	if detectedAudience, err := getClusterServiceAccountIssuer(mgr.GetAPIReader()); err == nil && detectedAudience != "" {
 		setupLog.Info("auto-detected cluster service account issuer", "audience", detectedAudience)
 		clusterAudience = detectedAudience
